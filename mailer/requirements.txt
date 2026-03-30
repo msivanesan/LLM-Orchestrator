@@ -1,0 +1,5 @@
+Flask
+Flask-Mail
+redis
+python-dotenv
+python-json-logger
