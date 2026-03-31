@@ -3,15 +3,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![React: 18+](https://img.shields.io/badge/React-18+-61dafb.svg)](https://reactjs.org/)
-[![Redis: Durable](https://img.shields.io/badge/Redis-Durable%20Queue-red.svg)](https://redis.io/)
+[![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
 
-A production-hardened, high-performance microservice architecture designed for secure AI model orchestration, centralized identity management, and reliable background processing. This ecosystem is built to bridge the gap between volatile local prototypes and stable enterprise deployments.
+A production-hardened, high-performance microservice architecture designed for secure AI model orchestration, centralized identity management, persistent LLM memory, and comprehensive APM observability. Built to bridge the gap between volatile local prototypes and stable enterprise deployments.
 
 ---
 
 ## 🏗️ System Architecture
 
-LLM-Orchestrator utilizes a **Gateway-First** design pattern. All traffic is funneled through an Nginx API Gateway that coordinates authentication sidecars and service discovery.
+LLM-Orchestrator utilizes a **Gateway-First** design pattern with a suite of highly cohesive Python Flask microservices and a React (Vite) frontend.
 
 ```mermaid
 graph TD
@@ -22,130 +22,147 @@ graph TD
         US[User Service:5001]
         AS[ApiKey Service:5002]
         AI[AI Service:5003]
+        CS[Chat Service:5004]
     end
 
     subgraph "Durable Infrastructure"
         R[(Redis Shared State)]
-        DB[(SQLite/Postgres Persistance)]
-        MQ[Redis Durable Queue]
+        DB[(PostgreSQL)]
+        VC[(ChromaDB)]
     end
 
-    subgraph "Background Work"
-        MW[Mailer Worker]
+    subgraph "Observability (APM)"
+        PR[Prometheus]
+        GR[Grafana]
+        AM[Alertmanager]
     end
 
     subgraph "External Inference"
-        OL[Ollama GPU Engine]
+        OL[Ollama Edge GPU Engine]
     end
 
     %% Flow logic
-    GW -->|Route: /api/users| US
-    GW -->|Route: /api/apikeys| AS
-    GW -->|Route: /api/ai| AI
+    GW -->|/api/users| US
+    GW -->|/api/apikeys| AS
+    GW -->|/api/chat| CS
+    
+    %% AI / Chat Logic
+    CS <-->|Semantic Search| VC
+    CS -->|Proxy Models| AI
+    CS <-->|Direct Completion| OL
+    AI <-->|Monitor Models| OL
     
     %% Auth Sidecar Logic
     AI -.->|Auth Request| AS
     
-    %% Async Logic
-    US -.->|Enqueue| MQ
-    AS -.->|Enqueue| MQ
-    MQ -.->|BRPOP| MW
-    
-    %% Inference Logic
-    AI <-->|Proxy| OL
+    %% Metrics
+    PR -.->|Scrapes /metrics| US
+    PR -.->|Scrapes /metrics| AS
+    PR -.->|Scrapes /metrics| CS
+    PR -.->|Scrapes /metrics| AI
 ```
+
+---
+
+## 🌟 Key Features
+
+### 🧠 Persistent LLM Memory & RAG
+- **Background Extraction**: The Chat Service automatically parses conversations in the background to extract user facts (name, preferences, habits) and stores them in a memory key-value DB.
+- **Dynamic Context Injection**: Memories are automatically injected into the LLM `system_prompt` so the AI remembers the user infinitely across all future sessions.
+- **ChromaDB Vector Search**: Chat histories are mathematically embedded (`all-MiniLM-L6-v2`) and stored in ChromaDB using fast dot-product (Inner Product) indexing for sub-second semantic retrieval.
+
+### ⚡ Local Edge Inference
+- **Ollama Integration**: Powered by local open-source models (like `llama3.2:1b` and `qwen2.5:0.5b`) running instantly on-device.
+- **vLLM Ready**: Exposes standard OpenAI `/v1/chat/completions` APIs. To scale to a cluster, you simply point the URL to vLLM without changing a single line of backend code.
+- **Dynamic Model Discovery**: The UI polls the proxy layer for actively downloaded models in real-time.
+
+### 📊 Full-Stack APM & Observability
+- **Prometheus Scrapers**: Unified metrics wrappers across all microservices. Tracks `http_request_duration`, token counts, DB connection times, and latency.
+- **Grafana Live Dashboards**: Instant cross-service visualization.
+- **AlertManager**: Tracks error-rate thresholds and security alerts (brute-force protection limits), configured to route to incident response channels.
+
+### 🛡️ Nginx API Gateway
+- **Centralized Security**: Manages CORS policy and Reverse Proxying across all services.
+- **Streaming Ready**: Tuned with chunked transfer encoding and disabled buffering to support high-speed LLM Server-Sent Events (SSE).
 
 ---
 
 ## 🛰️ Microservice Deep-Dive
 
-### 1. 🛡️ Nginx API Gateway
-The "Front Door" of the ecosystem.
--   **Centralized CORS**: Manages cross-origin resource sharing policy across all services.
--   **Service Proxying**: Abstract internal port complexities from the client.
--   **High-Volume Generation**: Specifically tuned with **300s timeouts** to support long-form LLM response streaming.
--   **Security**: Implements `auth_request` for the AI service, ensuring every inference call is validated against the ApiKey service before reaching the backend.
+### 1. 💬 Chat Service (Port 5004)
+The stateful orchestration core.
+- Manages SQLAlchemy integration, chat sessions, Server-Sent Events (SSE) streaming, and automatic model-title generation.
+- Controls vector inserts and semantic context limits to respect LLM context token windows.
 
 ### 2. 🆔 User Service (Port 5001)
 The primary identity provider (IdP).
--   **Stateless Auth**: Issues and validates JWTs for cross-service authentication.
--   **Security Lifecycle**: Handles registration, login, and profile management.
--   **Self-Healing recovery**: Integrated with the Mailer service for OTP and password reset cycles.
--   **Hardening**: Implements brute-force protection through account locking.
+- **Stateless Auth**: Issues and validates JWTs for cross-service authentication.
+- **Hardening**: Implements brute-force and password-reset protection flows.
 
 ### 3. 🔑 ApiKey & Rate-Limiting Service (Port 5002)
 The "Traffic Warden" for external integrations.
--   **Redis TTL Hardening**: Uses high-performance Redis increments with automatic TTL (60s) to prevent memory leaks while providing sub-millisecond rate-limit checks.
--   **Admin Control**: Full CRUD for API keys with configurable RPM (Requests Per Minute) limits.
--   **Auth Sidecar Support**: Exclusive endpoint for Nginx to perform low-latency header validation.
+- Uses high-performance Redis atomic increments with TTL (60s) to perform sub-millisecond RPM (Requests Per Minute) limiting without causing Redis memory accumulation.
 
-### 4. 🤖 AI Orchestration Service (Port 5003)
-A Gemini-compatible proxy layer.
--   **Model Discovery**: Interfaces with external engines (Ollama, vLLM) to provide a unified `/models` list.
--   **Scalable Inference**: Proxies chat and generation completions to high-performance GPU engines.
--   **Payload Transformation**: Normalizes request/response formats across different inference providers.
-
-### 5. 📬 Central Mailer service (Worker)
-A durable background processing engine.
--   **Zero-Loss Guarantee**: Replaced volatile Pub/Sub with **Durable Redis Lists**. Messages persist even if the worker service is offline.
--   **Blocking Consumer**: Uses the `BRPOP` pattern for efficient, real-time task processing without CPU polling.
--   **Safe Shutdown**: Custom management script supports `stop` commands and PID tracking for graceful worker restarts.
+### 4. 🤖 AI Proxy Service (Port 5003)
+A unified AI compatibility layer.
+- Actively polls the local inference engine (like Ollama) for available models and proxies them nicely formatted to the Chat Service.
 
 ---
 
 ## 🚀 Installation & Deployment
 
-### Environment Setup
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/msivanesan/LLM-Orchestrator.git
-    cd LLM-Orchestrator
-    ```
-2.  **Configure Environment**:
-    Create a root `.env` file from the provided template:
-    ```env
-    REDIS_URL=redis://localhost:6379
-    DATABASE_URL=sqlite:///database.db
-    AI_ENGINE_URL=http://your-gpu-server/ai
-    SMTP_SERVER=smtp.gmail.com
-    # ... see .env.example for details
-    ```
+### 1. Requirements
+Ensure you have **Python 3.10+**, **Node.js**, and **Docker / Docker Compose** installed.
 
-### Startup Sequence
-For best results, start services in the following order:
+### 2. Environment Setup
+```bash
+git clone https://github.com/msivanesan/LLM-Orchestrator.git
+cd LLM-Orchestrator
+```
+Populate `.env` with the required URIs:
+```env
+REDIS_URL=redis://localhost:6379
+DATABASE_URL=postgresql://user:pass@localhost/db
+AI_ENGINE_URL=http://localhost:11434/v1/chat/completions
+DEFAULT_CHAT_MODEL=llama3.2:1b
+CHROMA_HOST=localhost
+```
 
-1.  **Infrastructure**: Ensure Redis and your Database are running.
-2.  **User Service**: `python -m user.manage runserver`
-3.  **ApiKey Service**: `python -m apikey.manage runserver`
-4.  **AI Service**: `python -m ai.manage runserver`
-5.  **Mailer Worker**: `python -m mailer.manage runserver`
-6.  **Nginx**: Reload configuration with `nginx -s reload`.
-7.  **Frontend**: `cd frontend && npm run dev`
+### 3. Start Infrastructure & Observability
+Boot the full APM, Gateway, and LLM framework using Docker Compose:
+```bash
+docker compose up -d
+```
+*(Optionally, pull your local model: `docker exec llm_ollama ollama pull llama3.2:1b`)*
 
----
+### 4. Run Microservices
+Activate your `venv` and boot the Python services natively.
+```bash
+python -m user.manage runserver
+python -m apikey.manage runserver
+python -m ai.manage runserver
+python -m chat.manage runserver
+```
 
-## 🔒 Reliability & Hardening Details
-
-### Durable Task Queue
-We migrated from simple Pub/Sub to a **Durable Redis Queue**. This means if the Mailer service crashes during a high-load event, no OTPs or notifications are lost. They sit safely in Redis until a new worker process consumes them.
-
-### Rate-Limit Memory Safety
-Previous versions faced memory growth issues in Redis due to persistent rate-limit keys. The system now uses atomic `INCR` + `EXPIRE` commands, ensuring Redis remains lean and fast indefinitely.
-
-### AI Gateway Stability
-To support "slow" completions common in LLMs, the Nginx gateway is explicitly tuned for long-lived connections, preventing premature disconnects during deep-thinking generations.
+### 5. Start the React Frontend
+```bash
+cd frontend && npm install && npm run dev
+```
 
 ---
 
 ## 📂 Project Structure
 ```text
 .
-├── ai/             # AI Orchestration Service (Flask)
+├── ai/             # AI Proxy Service (Flask)
 ├── apikey/         # API Key & Rate Limit Service (Flask)
+├── chat/           # Streaming / Memory / RAG Service (Flask)
 ├── user/           # Identity & Profile Service (Flask)
-├── mailer/         # Durable Email Worker (Worker)
+├── frontend/       # React (Vite) Chat Dashboard UI
+├── monitoring/     # APM Rules (Prometheus/Grafana/Alertmanager)
 ├── nginx/          # API Gateway Configuration
-├── frontend/       # React (Vite) Admin Dashboard
+├── command/        # Deep-dive architectural flowcharts
+├── docker-compose.yml
 └── .env            # Centralized Configuration
 ```
 

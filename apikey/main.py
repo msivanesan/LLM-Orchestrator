@@ -46,6 +46,15 @@ def create_app():
 
     app.register_blueprint(apikey_bp, url_prefix='/api/apikeys')
 
+    # APM
+    try:
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+        from apm import setup_metrics
+        setup_metrics(app, service_name='apikey')
+    except Exception as e:
+        app.logger.warning('APM setup failed: %s', e)
+
     @app.after_request
     def log_response(response):
         log_options = os.getenv('LOG_OPTIONS_REQUESTS', 'False').lower() == 'true'

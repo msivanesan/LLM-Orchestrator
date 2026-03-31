@@ -1,0 +1,215 @@
+groups:
+
+  # ══════════════════════════════════════════════════════════════════
+  # SERVICE AVAILABILITY
+  # ══════════════════════════════════════════════════════════════════
+  - name: service_availability
+    rules:
+
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Service {{ $labels.job }} is DOWN"
+          description: "{{ $labels.job }} on {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+      - alert: ServiceHighErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ High error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} has >5% HTTP 5xx rate (current: {{ $value | humanizePercentage }}) over last 5 minutes."
+
+      - alert: ServiceCriticalErrorRate
+        expr: |
+          (
+            rate(http_requests_total{status=~"5.."}[5m])
+            /
+            rate(http_requests_total[5m])
+          ) > 0.20
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Critical error rate on {{ $labels.service }}"
+          description: "{{ $labels.service }} has >20% HTTP 5xx error rate. Immediate attention required."
+
+  # ══════════════════════════════════════════════════════════════════
+  # RESPONSE TIME / LATENCY
+  # ══════════════════════════════════════════════════════════════════
+  - name: latency
+    rules:
+
+      - alert: HighApiLatency
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{service!="chat"}[5m])
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Slow API on {{ $labels.service }}"
+          description: "P95 latency for {{ $labels.service }} is {{ $value | humanizeDuration }} (threshold: 2s)."
+
+      - alert: ChatStreamingSlow
+        expr: |
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket{service="chat", endpoint=~".*/stream.*"}[5m])
+          ) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Chat streaming P95 > 30s"
+          description: "Chat streaming responses are taking {{ $value | humanizeDuration }} at P95."
+
+  # ══════════════════════════════════════════════════════════════════
+  # LLM / AI ENGINE
+  # ══════════════════════════════════════════════════════════════════
+  - name: llm
+    rules:
+
+      - alert: LLMHighLatency
+        expr: |
+          histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[5m])) > 45
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ LLM P95 latency > 45s"
+          description: "The LLM engine P95 response time is {{ $value | humanizeDuration }}. Consider load or model issues."
+
+      - alert: LLMHighFailureRate
+        expr: |
+          rate(llm_requests_total{status="error"}[5m])
+          /
+          rate(llm_requests_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 LLM failure rate >10%"
+          description: "LLM API is failing {{ $value | humanizePercentage }} of requests. Check AI engine connectivity."
+
+  # ══════════════════════════════════════════════════════════════════
+  # REDIS CACHE
+  # ══════════════════════════════════════════════════════════════════
+  - name: redis
+    rules:
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Redis is DOWN"
+          description: "Redis cache is unreachable. Chat context and session caching will fail."
+
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Redis memory >85%"
+          description: "Redis is using {{ $value | humanizePercentage }} of its max memory. Risk of eviction."
+
+      - alert: LowCacheHitRate
+        expr: |
+          rate(cache_operations_total{result="hit"}[10m])
+          /
+          rate(cache_operations_total{result=~"hit|miss"}[10m]) < 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Cache hit rate below 50%"
+          description: "Cache hit rate is {{ $value | humanizePercentage }}. Session context may be cold."
+
+  # ══════════════════════════════════════════════════════════════════
+  # AUTHENTICATION
+  # ══════════════════════════════════════════════════════════════════
+  - name: auth
+    rules:
+
+      - alert: HighAuthFailureRate
+        expr: |
+          rate(auth_attempts_total{result="failure"}[5m])
+          /
+          rate(auth_attempts_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ High auth failure rate on {{ $labels.service }}"
+          description: "{{ $value | humanizePercentage }} of authentication attempts are failing. Possible brute-force."
+
+      - alert: BruteForceDetected
+        expr: rate(auth_attempts_total{result="failure"}[1m]) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🚨 Brute-force detected on {{ $labels.service }}"
+          description: "{{ $value | humanize }} failed auth attempts per second. Possible attack in progress."
+
+  # ══════════════════════════════════════════════════════════════════
+  # SYSTEM RESOURCES
+  # ══════════════════════════════════════════════════════════════════
+  - name: system
+    rules:
+
+      - alert: HighCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ High CPU on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanize }}% for more than 5 minutes."
+
+      - alert: LowDiskSpace
+        expr: |
+          (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Low disk space on {{ $labels.instance }}"
+          description: "Disk has only {{ $value | humanizePercentage }} free space remaining."
+
+      - alert: HighMemoryUsage
+        expr: |
+          (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "🔴 Memory usage >90% on {{ $labels.instance }}"
+          description: "System memory is {{ $value | humanizePercentage }} full. Risk of OOM."
+
+  # ══════════════════════════════════════════════════════════════════
+  # CHAT-SPECIFIC BUSINESS METRICS
+  # ══════════════════════════════════════════════════════════════════
+  - name: chat_business
+    rules:
+
+      - alert: ChatServiceHighLoad
+        expr: http_active_requests{service="chat"} > 50
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "⚠️ Chat service under high concurrent load"
+          description: "{{ $value }} concurrent streaming requests on the chat service."

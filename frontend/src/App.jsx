@@ -20,6 +20,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import VerifyOTP from './pages/VerifyOTP';
 import KeyList from './pages/KeyList';
 import KeyCreate from './pages/KeyCreate';
+import Chat from './pages/Chat';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -105,6 +106,12 @@ function App() {
           element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout}><KeyCreate /></Layout> : <Navigate to="/" />} 
         />
         
+        {/* Chat Route */}
+        <Route
+          path="/chat"
+          element={user ? <Chat user={user} /> : <Navigate to="/login" />}
+        />
+
         {/* Public Password Recovery Routes */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-otp" element={<VerifyOTP />} />

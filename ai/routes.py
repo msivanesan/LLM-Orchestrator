@@ -13,11 +13,12 @@ ai_bp = Blueprint('ai_bp', __name__)
 DEFAULT_ENGINE = 'https://192.168.5.23/ai/v1/chat/completions'
 AI_ENGINE_URL = os.getenv('AI_ENGINE_URL', DEFAULT_ENGINE)
 
-# Model Registry (Simulation of available models on this platform)
+# Model Registry (Local LLM via Ollama/vLLM)
 AVAILABLE_MODELS = {
-    "llama3-7b": {"engine": AI_ENGINE_URL, "description": "Llama 3 7B - Fast & Capable"},
-    "llama3-70b": {"engine": AI_ENGINE_URL, "description": "Llama 3 70B - High Reasoning (Experimental)"},
-    "gemini-flash-proxy": {"engine": AI_ENGINE_URL, "description": "High-Efficiency Flash Proxy"},
+    "llama3.2:1b": {"engine": AI_ENGINE_URL, "description": "Llama 3.2 1B - Fast Local Edge Model"},
+    "qwen2.5:0.5b": {"engine": AI_ENGINE_URL, "description": "Qwen 2.5 0.5B - Lightning Fast"},
+    "llama3-7b": {"engine": AI_ENGINE_URL, "description": "Llama 3 7B - Standard Capable"},
+    "llama3-70b": {"engine": AI_ENGINE_URL, "description": "Llama 3 70B - High Reasoning"},
 }
 
 @ai_bp.route('/models/<model_id>/generate', methods=['POST'])
@@ -44,7 +45,7 @@ def model_specific_completion(model_id):
     
     # 2. Build Payload
     payload = {
-        "model": model_id.split('-')[0], # Simplified model name for engine
+        "model": model_id,
         "messages": user_messages,
         "temperature": data.get('temperature', 0.7),
         "max_tokens": data.get('max_tokens', 1024)
@@ -83,21 +84,45 @@ def legacy_completion():
 
 @ai_bp.route('/models', methods=['GET'])
 def list_models():
-    """List available model endpoints"""
-    return jsonify({
-        "models": [
-            {
+    """List dynamically available model endpoints from the local engine."""
+    models_list = []
+    engine_models = []
+    
+    try:
+        # e.g. turn http://localhost:11434/v1/chat/completions into http://localhost:11434/v1/models
+        models_url = AI_ENGINE_URL.replace('/chat/completions', '') + '/models'
+        if not models_url.endswith('/models'): models_url += '/models' # cleanup
+            
+        resp = requests.get(models_url, timeout=5)
+        if resp.status_code == 200:
+            engine_models = resp.json().get('data', [])
+    except Exception:
+        pass
+        
+    if engine_models:
+        for m in engine_models:
+            mid = m['id']
+            # Only list downloaded models, map description if known or fallback
+            desc = AVAILABLE_MODELS.get(mid, {}).get('description', f"Local GPU Model ({mid})")
+            models_list.append({
+                "name": f"models/{mid}",
+                "displayName": f"{desc}",
+                "capabilities": ["generateContent"]
+            })
+    else:
+        # Fallback to defaults if engine is offline/unsupported
+        for mid, info in AVAILABLE_MODELS.items():
+            models_list.append({
                 "name": f"models/{mid}",
                 "displayName": info['description'],
                 "capabilities": ["generateContent"]
-            } for mid, info in AVAILABLE_MODELS.items()
-        ]
-    }), 200
+            })
+
+    return jsonify({ "models": models_list }), 200
 
 @ai_bp.route('/status', methods=['GET'])
 def ai_status():
     return jsonify({
         "status": "online",
         "platform": "ai-orchestrator-platform",
-        "active_models": list(AVAILABLE_MODELS.keys())
     }), 200

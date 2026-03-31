@@ -6,10 +6,14 @@ from .routes import user_bp
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 import os
+import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
 from dotenv import load_dotenv
+
+# Allow importing shared apm module from project root
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 load_dotenv()
 
@@ -68,13 +72,19 @@ def create_app():
     
     app.register_blueprint(user_bp, url_prefix='/api/users')
 
+    # APM
+    try:
+        from apm import setup_metrics
+        setup_metrics(app, service_name='user')
+    except Exception as e:
+        app.logger.warning('APM setup failed: %s', e)
+
     # Global Response Logging (for APM)
     @app.after_request
     def log_response(response):
         log_options = os.getenv('LOG_OPTIONS_REQUESTS', 'False').lower() == 'true'
         if not log_options and request.method == 'OPTIONS':
             return response
-            
         app.logger.info(
             f"{request.method} {request.path} - Status: {response.status_code}"
         )

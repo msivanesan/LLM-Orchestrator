@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  ShieldCheck, LayoutDashboard, Users, UserPlus, LogOut, Key 
+  ShieldCheck, LayoutDashboard, Users, UserPlus, LogOut, Key, MessageSquare
 } from 'lucide-react';
 
 const Layout = ({ user, onLogout, children }) => (
@@ -13,6 +13,7 @@ const Layout = ({ user, onLogout, children }) => (
       </div>
       <nav className="sidebar-nav">
         <Link to="/dashboard"><LayoutDashboard size={18} /> Dashboard</Link>
+        <Link to="/chat"><MessageSquare size={18} /> AI Chat</Link>
         <Link to="/users"><Users size={18} /> Users</Link>
         {user.role === 'admin' && (
           <>

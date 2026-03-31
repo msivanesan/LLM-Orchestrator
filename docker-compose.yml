@@ -1,5 +1,8 @@
 services:
-  # 1. THE SECURITY GATEWAY
+  # ══════════════════════════════════════════════════════════════════
+  # EXISTING INFRASTRUCTURE
+  # ══════════════════════════════════════════════════════════════════
+
   gateway:
     image: nginx:latest
     container_name: llm_orchestrator_gateway
@@ -11,9 +14,9 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - redis
+      - chromadb
     restart: always
 
-  # 2. THE CACHE (OTP & Rate Limits)
   redis:
     image: redis:7-alpine
     container_name: llm_orchestrator_cache
@@ -22,6 +25,145 @@ services:
     volumes:
       - redis_data:/data
     restart: always
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: llm_orchestrator_chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenConfigServerAuthCredentialsProvider
+      - CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER=Authorization
+      - CHROMA_SERVER_AUTH_CREDENTIALS=${CHROMA_AUTH_TOKEN:-changeme-chroma-token}
+      - CHROMA_SERVER_AUTH_PROVIDER=chromadb.auth.token.TokenAuthServerProvider
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ══════════════════════════════════════════════════════════════════
+  # APM STACK
+  # ══════════════════════════════════════════════════════════════════
+
+  # ── Prometheus (metrics collection) ───────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: llm_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--alertmanager.notification-queue-capacity=10000'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+    depends_on:
+      - alertmanager
+
+  # ── Alertmanager (alert routing → email/Slack) ────────────────────
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: llm_alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    environment:
+      - ALERT_EMAIL_FROM=${ALERT_EMAIL_FROM:-alerts@example.com}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-admin@example.com}
+      - ALERT_EMAIL_PASSWORD=${ALERT_EMAIL_PASSWORD:-}
+    restart: always
+
+  # ── Grafana (dashboards & visualization) ──────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: llm_grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_ALERTING_ENABLED=true
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_SMTP_ENABLED=${GRAFANA_SMTP_ENABLED:-false}
+    restart: always
+    depends_on:
+      - prometheus
+
+  # ══════════════════════════════════════════════════════════════════
+  # LLM RUNTIME  (Ollama now → vLLM later, same OpenAI-compatible API)
+  # ══════════════════════════════════════════════════════════════════
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: llm_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama       # persist downloaded models
+    environment:
+      - OLLAMA_HOST=0.0.0.0               # listen on all interfaces
+      - OLLAMA_ORIGINS=*                  # allow CORS from gateway
+      - OLLAMA_NUM_PARALLEL=2             # concurrent generation slots
+      - OLLAMA_MAX_LOADED_MODELS=1        # keep 1 model in RAM
+      - OLLAMA_KEEP_ALIVE=5m              # unload after 5 min idle
+    restart: always
+    # ── GPU support: uncomment if nvidia-container-toolkit is installed ────
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: llm_redis_exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    restart: always
+    depends_on:
+      - redis
 
 volumes:
   redis_data:
+  chroma_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  ollama_models:          # persists Llama/Qwen/Phi weights across restarts
