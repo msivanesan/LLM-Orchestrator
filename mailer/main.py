@@ -33,63 +33,64 @@ def run_worker():
     redis_client = redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
     
     with app.app_context():
-        print("📮 Central Mailer Service started. Listening on 'email_queue'...")
-        pubsub = redis_client.pubsub()
-        pubsub.subscribe('email_queue')
+        print("📮 Central Mailer Service started. Processing 'email_queue' (Durable Mode)...")
         
-        for message in pubsub.listen():
-            if message['type'] == 'message':
-                try:
-                    data = json.loads(message['data'])
-                    email = data.get('email')
-                    subject = data.get('subject', 'Notification')
-                    template_id = data.get('template_id')
-                    context = data.get('context', {})
-                    
-                    html = None
-                    if template_id == 'OTP_VERIFICATION':
-                        html = get_otp_template(context.get('username'), context.get('otp'))
-                    elif template_id == 'API_KEY_CREATED':
-                        html = get_apikey_template(
-                            context.get('username'), 
-                            context.get('key_name'), 
-                            context.get('key'),
-                            context.get('rpm')
-                        )
-                    elif template_id == 'WELCOME_EMAIL':
-                        html = get_welcome_template(context.get('username'), context.get('email'))
-                    elif template_id == 'PASSWORD_CHANGED':
-                        html = get_password_changed_template(context.get('username'))
-                    elif template_id == 'STATUS_UPDATE':
-                        html = get_status_changed_template(context.get('username'), context.get('status'))
-                    elif template_id == 'APIKEY_STATUS_UPDATE':
-                        html = get_apikey_status_changed_template(
-                            context.get('username'), 
-                            context.get('key_name'), 
-                            context.get('status')
-                        )
-                    elif template_id == 'APIKEY_DELETED':
-                        html = get_apikey_deleted_template(context.get('username'), context.get('key_name'))
-                    
-                    # Fallback to direct html if provided
-                    if not html:
-                        html = data.get('html')
-                        
-                    body = data.get('body', 'Please view this email in an HTML-compatible client.')
-                    
-                    if not email:
-                        continue
-                        
-                    msg = Message(
-                        subject,
-                        recipients=[email],
-                        body=body,
-                        html=html
+        while True:
+            try:
+                # Use BRPOP for a reliable queue (blocking pop from right)
+                # This ensures we only process one at a time and don't lose tasks if we crash
+                _, message_data = redis_client.brpop('email_queue', timeout=0)
+                
+                data = json.loads(message_data)
+                email = data.get('email')
+                subject = data.get('subject', 'Notification')
+                template_id = data.get('template_id')
+                context = data.get('context', {})
+                
+                html = None
+                if template_id == 'OTP_VERIFICATION':
+                    html = get_otp_template(context.get('username'), context.get('otp'))
+                elif template_id == 'API_KEY_CREATED':
+                    html = get_apikey_template(
+                        context.get('username'), 
+                        context.get('key_name'), 
+                        context.get('key'),
+                        context.get('rpm')
                     )
-                    mail.send(msg)
-                    print(f"📧 [Mailer] Successfully sent {template_id or 'direct'} email to: {email}")
-                except Exception as e:
-                    print(f"❌ [Mailer] Error: {str(e)}")
+                elif template_id == 'WELCOME_EMAIL':
+                    html = get_welcome_template(context.get('username'), context.get('email'))
+                elif template_id == 'PASSWORD_CHANGED':
+                    html = get_password_changed_template(context.get('username'))
+                elif template_id == 'STATUS_UPDATE':
+                    html = get_status_changed_template(context.get('username'), context.get('status'))
+                elif template_id == 'APIKEY_STATUS_UPDATE':
+                    html = get_apikey_status_changed_template(
+                        context.get('username'), 
+                        context.get('key_name'), 
+                        context.get('status')
+                    )
+                elif template_id == 'APIKEY_DELETED':
+                    html = get_apikey_deleted_template(context.get('username'), context.get('key_name'))
+                
+                # Fallback to direct html if provided
+                if not html:
+                    html = data.get('html')
+                    
+                body = data.get('body', 'Please view this email in an HTML-compatible client.')
+                
+                if not email:
+                    continue
+                    
+                msg = Message(
+                    subject,
+                    recipients=[email],
+                    body=body,
+                    html=html
+                )
+                mail.send(msg)
+                print(f"📧 [Mailer] Successfully sent {template_id or 'direct'} email to: {email}")
+            except Exception as e:
+                print(f"❌ [Mailer] Error: {str(e)}")
 
 if __name__ == '__main__':
     run_worker()

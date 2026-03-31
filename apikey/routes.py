@@ -74,7 +74,7 @@ def create_key():
         }
     }
     try:
-        redis_client.publish('email_queue', json.dumps(email_data))
+        redis_client.rpush('email_queue', json.dumps(email_data))
         current_app.logger.info(f"API Key notification queued for {new_key.contact_email}")
     except Exception as e:
         current_app.logger.error(f"Failed to queue API key notification: {str(e)}")
@@ -207,20 +207,32 @@ def validate_key():
 def validate_header():
     """Reads key from X-API-KEY header for Nginx auth_request."""
     key_str = request.headers.get('X-API-KEY')
-    if not key_str or not ApiKey.query.filter_by(key=key_str, is_active=True).first():
-        return jsonify({"message": "Invalid or missing key"}), 401
+    if not key_str:
+        return jsonify({"message": "Missing key"}), 401
+        
+    # Check cache/DB for key validity and metadata in ONE hit
+    key_record = ApiKey.query.filter_by(key=key_str, is_active=True).first()
+    if not key_record:
+        return jsonify({"message": "Invalid or revoked key"}), 401
     
-    # Rate limit check
-    from datetime import datetime
-    now = datetime.utcnow()
+    # Rate limit check with explicit TTL to prevent Redis memory leaks
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
     redis_limit_key = f"rate_limit:{key_str}:{now.strftime('%Y%m%d%H%M')}"
-    key_record = ApiKey.query.filter_by(key=key_str).first()
     
     try:
-        if redis_client.incr(redis_limit_key) > key_record.rpm:
+        # Atomic Increment & Set Expiry if new
+        current_count = redis_client.incr(redis_limit_key)
+        if current_count == 1:
+            redis_client.expire(redis_limit_key, 60) # Only store for 1 minute
+            
+        if current_count > key_record.rpm:
             # We return 403 here because Nginx auth_request 
             # only understands 401/403 as "denied".
             return jsonify({"message": "Rate limit exceeded"}), 403
+            
         return "", 200
-    except:
+    except Exception as e:
+        # Fail-safe: Allow and log if Redis is down
+        current_app.logger.error(f"Redis rate limiting Error: {str(e)}")
         return "", 200

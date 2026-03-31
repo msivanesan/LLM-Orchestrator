@@ -11,6 +11,8 @@ from flask_jwt_extended import (
 from flask_mail import Message
 from .extensions import db, mail, redis_client
 from flask import current_app
+import random
+import json
 
 user_bp = Blueprint('users', __name__)
 
@@ -82,7 +84,7 @@ def register():
         }
     }
     try:
-        redis_client.publish('email_queue', json.dumps(email_data))
+        redis_client.rpush('email_queue', json.dumps(email_data))
     except:
         pass
 
@@ -108,7 +110,7 @@ def toggle_user(user_id):
         }
     }
     try:
-        redis_client.publish('email_queue', json.dumps(email_data))
+        redis_client.rpush('email_queue', json.dumps(email_data))
     except:
         pass
 
@@ -220,7 +222,7 @@ def change_password():
         }
     }
     try:
-        redis_client.publish('email_queue', json.dumps(email_data))
+        redis_client.rpush('email_queue', json.dumps(email_data))
     except:
         pass
 
@@ -250,12 +252,7 @@ def forgot_password():
         otp = existing_otp.decode('utf-8')
     else:
         import random
-        otp = ''.join([str(random.randint(0, 9)) for _ in range(6)])
-        # Store in Redis with 10-minute expiry ONLY if it's new
-        redis_client.setex(redis_key, 600, otp)
-    
-    # Publish to Redis Channel (Pub/Sub Model)
-    import json
+    # Push to Redis List (Durable Queue Model)
     email_data = {
         "email": email,
         "subject": "Your Security Code",
@@ -267,10 +264,10 @@ def forgot_password():
     }
     
     try:
-        redis_client.publish('email_queue', json.dumps(email_data))
-        current_app.logger.info(f"Email task published to Redis for {email}")
+        redis_client.rpush('email_queue', json.dumps(email_data))
+        current_app.logger.info(f"Email task pushed to Redis for {email}")
     except Exception as e:
-        current_app.logger.error(f"Failed to publish email task: {str(e)}")
+        current_app.logger.error(f"Failed to push email task: {str(e)}")
         # In development, you can return the OTP for testing
         if current_app.debug:
             return jsonify({"message": "OTP task created (Debug Mode)", "otp": otp}), 200
@@ -333,7 +330,7 @@ def verify_otp():
         }
     }
     try:
-        redis_client.publish('email_queue', json.dumps(email_data))
+        redis_client.rpush('email_queue', json.dumps(email_data))
     except:
         pass
 

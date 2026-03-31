@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. THE SECURITY GATEWAY
   gateway:
@@ -15,7 +13,7 @@ services:
       - redis
     restart: always
 
-  # 2. THE DISTRIBUTED STATE (OTP & Rate Limits)
+  # 2. THE CACHE (OTP & Rate Limits)
   redis:
     image: redis:7-alpine
     container_name: llm_orchestrator_cache
@@ -24,7 +22,6 @@ services:
     volumes:
       - redis_data:/data
     restart: always
-    command: redis-server --appendonly yes
 
 volumes:
   redis_data:
