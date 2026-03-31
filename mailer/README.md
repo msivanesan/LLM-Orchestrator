@@ -1,40 +1,37 @@
-# 🛰️ Centralized Mailer Service (Asynchronous Subscriber)
+# 📬 Central Mailer Service (Worker)
 
-A high-fidelity HTML email delivery engine that scales independently of your API services.
+The Mailer Service is a durable background worker that handles email delivery for all services in the ecosystem. It decouples the user-facing APIs from slow SMTP operations.
 
 ## 🚀 Key Features
--   **Asynchronous Processing**: Reduces latency by processing emails from a Redis queue.
--   **Lightweight Context**: Receives only tiny "Template Context" instead of full HTML to minimize Redis memory usage.
--   **Dynamic Support**: Auto-hydrates various templates (Welcome, OTP, Security Alert, API Grant, etc.).
--   **Custom Templating**: Modern, branded design-system for all communications.
+-   **Durable Queueing**: Migrated from Pub/Sub to **Redis List (`email_queue`)**. This ensures no emails are lost if the worker is offline.
+-   **Blocking Consumer**: Uses `BRPOP` for maximum efficiency and immediate processing of new tasks.
+-   **High-Fidelity Templates**: Supports complex HTML templates with dynamic data hydration.
+-   **Safe Management**: Includes a custom CLI for starting and stopping the background process with PID tracking.
 
-## 📡 Message Format (Redis Pub/Sub)
-The Mailer subscribes to the `email_queue` channel.
-
-```json
-{
-  "email": "user@example.com",
-  "subject": "Security Alert",
-  "template_id": "PASSWORD_CHANGED",
-  "context": {
-      "username": "DevUser"
-  }
-}
+## 🏃 Operation
+### Start the Worker
+```bash
+python -m mailer.manage runserver
 ```
 
----
+### Stop the Worker
+```bash
+python -m mailer.manage stop
+```
 
 ## 🛠️ Configuration
--   **Redis**: Requires `REDIS_URL` for subscription.
--   **SMTP**: Requires `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, and `MAIL_PASSWORD` in the root `.env`.
+Required in `.env`:
+-   `MAIL_SERVER`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`: SMTP Credentials.
+-   `MAIL_DEFAULT_SENDER`: The email address appearing in the "From" field.
+-   `REDIS_URL`: Connection string for the shared Redis task queue.
 
----
-
-## 🏃 Running the Worker
-```bash
-python -m mailer.manage run
+## 📡 Message Format
+Services trigger emails by pushing a JSON payload to the `email_queue`:
+```json
+{
+  "to": "user@example.com",
+  "subject": "Login OTP",
+  "template": "otp_email",
+  "data": { "otp": "123456" }
+}
 ```
-
----
-
-&copy; 2026 Admin Dashboard Infrastructure

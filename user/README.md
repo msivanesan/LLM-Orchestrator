@@ -1,39 +1,26 @@
-# 🏰 User Microservice (Identity Provider)
+# 👤 Identity & User Service
 
-This service manages all aspects of user authentication, security, and profile management. It acts as the "Identity Provider" for the entire microservice ecosystem.
+The User Service is the central identity provider for the ecosystem. It handles user registration, authentication, and personalized profile management.
 
 ## 🚀 Key Features
--   **JWT Management**: Issues access (7 minutes) and refresh (30 days) tokens.
--   **Security Controls**: Brute-force protection for OTP verification.
--   **Identity Retrieval**: Provides the `/me` endpoint for cross-service authorization.
--   **Communication**: Enqueues welcome and security emails via the central Redis channel.
-
-## 📡 API Endpoints (Port 5001)
-
-| Route | Method | Description |
-|---|---|---|
-| `/register` | POST | Register a new user (Admin) |
-| `/login` | POST | Authenticate and get JWTs |
-| `/refresh` | POST | Renew access tokens |
-| `/me` | GET | Current user context |
-| `/forgot-password` | POST | Trigger OTP recovery (Resend logic enabled) |
-| `/verify-otp` | POST | Reset password via numeric code |
-| `/change-password` | POST | Manual security update |
-
----
+-   **JWT-based Authentication**: Secure, stateless authentication with shared secret key rotation support.
+-   **OTP Lifecycle**: Includes email-based OTP verification for secure signups and password resets.
+-   **Self-Healing Notifications**: Uses the durable Redis queue (`LPUSH`) to ensure critical account updates are always delivered.
+-   **Account Security**: Automated protection against brute-force attacks via account locking after 5 failed attempts.
 
 ## 🛠️ Configuration
--   **Redis**: Requires a running Redis instance for OTP storage and attempt tracking.
--   **Database**: Uses SQLite (`user.db`).
--   **JWT Shared Secret**: Must match other services to allow cross-service validation.
+Required in `.env`:
+-   `DATABASE_URL`: Path to your database (supports SQLite/PostgreSQL).
+-   `JWT_SECRET_KEY`: Secret string for token signing.
+-   `USER_SERVICE_PORT`: Defaults to 5001.
 
----
-
-## 🏃 Running the Service
+## 🏃 Operation
+### Start the Service
 ```bash
 python -m user.manage runserver
 ```
 
----
-
-&copy; 2026 Identity Infrastructure Service
+## 📡 Notable Endpoints
+-   `POST /api/users/login`: Login and receive access/refresh tokens.
+-   `POST /api/users/register`: Register and trigger OTP email.
+-   `GET /api/users/profile`: Private route to manage user settings.

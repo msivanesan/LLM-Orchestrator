@@ -1,38 +1,26 @@
-# 🔑 ApiKey Microservice (Integration Layer)
+# 🔑 ApiKey & Rate Limiting Service
 
-Manage external API credentials and high-performance rate limiting for third-party developers.
+This service manages external API credentials and enforces usage policies across the ecosystem. It features a high-performance rate-limiting engine powered by Redis.
 
 ## 🚀 Key Features
--   **Key Generation**: Automatically generates secure, 24-character prefixed keys (`ak_...`).
--   **Granular Logic**: Rate limiting (RPM) can be adjusted per individual key.
--   **Security Controls**: Revoke/Enable access instantly from the dashboard.
--   **Scalability**: Indexed `key` column for O(1) database lookups.
--   **Communication**: Notifies developers of creation, status changes, and terminations.
-
-## 📡 API Endpoints (Port 5002)
-
-| Route | Method | Description |
-|---|---|---|
-| `/create` | POST | Generate a new integration key |
-| `/` | GET | Paginated list of keys (Admin) |
-| `/<id>` | PUT | Update RPM/Metadata |
-| `/<id>/toggle` | PATCH | Revoke/Enable access |
-| `/<id>` | DELETE | Terminate key permanently |
-
----
+-   **API Key Management**: Create, toggle, and delete keys with custom rate limits (RPM).
+-   **Redis-based Rate Limiting**: Sub-millisecond latency for quota checks.
+-   **Memory Efficiency**: Automatically expires rate-limit data using Redis TTL to prevent memory leaks.
+-   **Auth Sidecar Support**: Provides the `/api/apikeys/validate_header` endpoint used by Nginx to authorize incoming requests.
 
 ## 🛠️ Configuration
--   **Authorization**: Uses shared JWTs from the User service.
--   **Database**: Uses indexed SQLite (`apikey.db`).
--   **Shared Secrets**: Ensure `JWT_SECRET_KEY` matches the Identity Provider.
+Required in `.env`:
+-   `REDIS_URL`: Link to your Redis instance.
+-   `APIKEY_DATABASE_URL`: Path to the SQLite/PostgreSQL database.
+-   `APIKEY_SERVICE_PORT`: Defaults to 5002.
 
----
-
-## 🏃 Running the Service
+## 🏃 Operation
+### Start the Service
 ```bash
 python -m apikey.manage runserver
 ```
 
----
-
-&copy; 2026 Admin Portal Infrastructure
+## 📡 Notable Endpoints
+-   `POST /api/apikeys/validate_header`: Fast-path validation for Nginx `auth_request`.
+-   `GET /api/apikeys/me`: Get status of the provided key.
+-   `POST /api/apikeys/create`: Register a new API key.
