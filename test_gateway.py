@@ -1,84 +1,142 @@
 import requests
 import json
+import time
+import sys
 
 # --- CONFIGURATION ---
-API_KEY = "ak_9b8c02cc0e0add6ac78e26a789c74a189cb0a7b0179f795d"
-GATEWAY_URL = "http://localhost" # The Unified Gateway Root
+GATEWAY_URL = "http://localhost"
+LOGIN_USER = "admin"  # Changed from email to username
+LOGIN_PASS = "1234"
+# External API Key (Create one in the dashboard and paste here if testing API directly)
+TEST_API_KEY = "ak_9b8c02cc0e0add6ac78e26a789c74a189cb0a7b0179f795d"
 
-def test_api_orchestrator(key):
-    headers = {"X-API-KEY": key, "Content-Type": "application/json"}
-    
-    print(f"🚀 LLM ORCHESTRATOR TEST SUITE")
-    print(f"Using Key: {key[:10]}...")
+def print_header(title):
+    print(f"\n🚀 {title}")
+    print("-" * 60)
+
+def test_full_chain():
+    print(f"📡 LLM-ORCHESTRATOR END-TO-END TEST SUITE")
     print("=" * 60)
-    
-    # 1. TEST IDENTITY (USER SERVICE)
-    print("\n[TEST 1] Accessing Identity Layer (User Service)")
-    print("-" * 40)
-    try:
-        # Note: Port 80 routes /api/users to microservice on 5001
-        response = requests.get(f"{GATEWAY_URL}/api/users/me", headers=headers)
-        print(f"Status: {response.status_code}")
-        print(f"Payload: {response.text[:200]}")
-    except Exception as e:
-        print(f"Error connecting: {e}")
 
-    # 2. TEST MODEL DISCOVERY
-    print("\n[TEST 2] Fetching Available Models")
-    print("-" * 40)
+    # 1. USER LOGIN (JWT AUTH)
+    print_header("1. Authenticating with User Service")
+    login_url = f"{GATEWAY_URL}/api/users/login"
     try:
-        response = requests.get(f"{GATEWAY_URL}/api/ai/models", headers=headers)
-        print(f"Status: {response.status_code}")
-        print(f"Models: {json.dumps(response.json(), indent=2)}")
+        res = requests.post(login_url, json={"username": LOGIN_USER, "password": LOGIN_PASS})
+        if res.status_code != 200:
+            print(f"❌ Login failed: {res.text}")
+            return
+        
+        token = res.json().get('access_token')
+        auth_headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        print(f"✅ Authenticated as {LOGIN_USER}")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Login error: {e}")
+        return
 
-    # 3. TEST AI GENERATION (GEMINI STYLE)
-    print("\n[TEST 3] Accessing Model-Specific Endpoint (Gemini Style)")
-    print("-" * 40)
-    # Using the new model-based route
-    target_model = "llama3-7b"
-    ai_payload = {
-        "prompt": "What is the capital of France?"
-    }
+    # 2. MODEL DISCOVERY
+    print_header("2. Model Discovery (Ollama via AI Proxy)")
     try:
-        print(f"Requesting generation from: {target_model}...")
-        response = requests.post(
-            f"{GATEWAY_URL}/api/ai/models/{target_model}/generate", 
-            headers=headers, 
-            json=ai_payload,
-            timeout=45
-        )
-        print(f"Status: {response.status_code}")
-        if response.status_code == 200:
-            data = response.json()
-            answer = data['candidates'][0]['content']['parts'][0]['text']
-            print(f"✅ {target_model} Response: {answer}")
+        # Chat API wraps in a .data object
+        res = requests.get(f"{GATEWAY_URL}/api/chat/models", headers=auth_headers)
+        res_json = res.json()
+        
+        # The API returns {'status': 'success', 'data': [...]}
+        data_field = res_json.get('data')
+        
+        if isinstance(data_field, list):
+            models = data_field
+        elif isinstance(data_field, dict):
+            models = data_field.get('models') or []
         else:
-            print(f"❌ Rejection Response: {response.text}")
+            models = []
+        
+        if models:
+            print(f"✅ Found {len(models)} models:")
+            for m in models:
+                name = m.get('name') or m.get('id', 'unknown')
+                display = m.get('displayName') or name
+                print(f"   - {name} ({display})")
+            target_model = models[0].get('name', 'llama3.2:1b').replace('models/', '')
+        else:
+            print("⚠️ No models returned from API logic, using fallback.")
+            target_model = "llama3.2:1b"
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Discovery error: {e}")
+        target_model = "llama3.2:1b"
 
-    # 3. TEST RATE LIMITING ON AI
-    print("\n[TEST 3] Stress Testing AI Rate Limiter (RPM Enforcement)")
-    print("-" * 40)
-    for i in range(1, 11):
-        try:
-            response = requests.post(
-                f"{GATEWAY_URL}/api/ai/completion", 
-                headers=headers, 
-                json=ai_payload
-            )
-            print(f"AI Request {i}: Status {response.status_code}")
-            if response.status_code == 429:
-                print("🚫 SUCCESS: Gateway enforced RPM Limit!")
-                break
-        except Exception as e:
-            print(f"Error: {e}")
-            break
+    # 3. CHAT STREAMING (SSE)
+    print_header(f"3. Chat Streaming (Model: {target_model})")
+    stream_url = f"{GATEWAY_URL}/api/chat/quick-stream"
+    payload = {
+        "content": "Tell me a very short 1-sentence fact about space.",
+        "model": target_model
+    }
+    
+    try:
+        print(f"Sending prompt: {payload['content']}")
+        # Use stream=True to handle SSE
+        with requests.post(stream_url, headers=auth_headers, json=payload, stream=True) as r:
+            if r.status_code != 200:
+                print(f"❌ Stream failed: {r.text}")
+            else:
+                print("📡 Receiving stream: ", end="", flush=True)
+                full_text = ""
+                for line in r.iter_lines():
+                    if line:
+                        line_str = line.decode('utf-8')
+                        if line_str.startswith('data: '):
+                            chunk = line_str[6:].strip()
+                            if chunk == '[DONE]':
+                                break
+                            try:
+                                data = json.loads(chunk)
+                                if data['type'] == 'token':
+                                    txt = data['text']
+                                    full_text += txt
+                                    print(txt, end="", flush=True)
+                            except:
+                                pass
+                print(f"\n✅ Stream complete.")
+    except Exception as e:
+        print(f"\n❌ Stream connection error: {e}")
+
+    # 4. USER MEMORY
+    print_header("4. Context & Memory Layer")
+    try:
+        # Wait a second for the background memory extraction thread to finish
+        print("Waiting for async memory extraction...")
+        time.sleep(2) 
+        res = requests.get(f"{GATEWAY_URL}/api/chat/memory", headers=auth_headers)
+        memories = res.json().get('data', [])
+        print(f"✅ Current Memory Facts: {len(memories)}")
+        for m in memories:
+            print(f"   - {m['key']}: {m['value']}")
+    except Exception as e:
+        print(f"❌ Memory error: {e}")
+
+    # 5. EXTERNAL API KEY ACCESS
+    print_header("5. External API Key Validation")
+    api_headers = {"X-API-KEY": TEST_API_KEY, "Content-Type": "application/json"}
+    try:
+        # Direct generation via the AI Proxy layer (bypasses chat state)
+        res = requests.post(
+            f"{GATEWAY_URL}/api/ai/models/{target_model}/generate",
+            headers=api_headers,
+            json={"prompt": "Say 'Gateway OK'"},
+            timeout=10
+        )
+        if res.status_code == 200:
+            print("✅ API Key Authentication: SUCCESS")
+        elif res.status_code == 401:
+            print("⚠️ API Key: UNAUTHORIZED (Update TEST_API_KEY in script to test this)")
+        else:
+            print(f"❌ API Key Rejection: {res.status_code} - {res.text}")
+    except Exception as e:
+        print(f"❌ API Key test error: {e}")
 
     print("\n" + "=" * 60)
-    print("🏁 Orchestrator Test Suite Completed!")
+    print("🏁 Full Chain Test Completed!")
 
 if __name__ == "__main__":
-    test_api_orchestrator(API_KEY)
+    test_full_chain()
