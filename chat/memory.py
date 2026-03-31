@@ -2,6 +2,7 @@
 Memory extractor — automatically pulls facts from conversations and stores them.
 Also provides helpers to load memory and inject it into the system prompt.
 """
+import os
 import json
 import logging
 from typing import Dict, List, Optional
@@ -106,7 +107,7 @@ def extract_and_save(user_id: int, session_id: int,
     try:
         result = chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            model="llama3-7b",
+            model=os.getenv('DEFAULT_CHAT_MODEL', 'llama3-7b'),
             temperature=0.1,      # very low — we want deterministic factual output
             max_tokens=256,
             system_prompt="You are a precise JSON extractor. Output only valid JSON.",

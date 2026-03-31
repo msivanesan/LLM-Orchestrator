@@ -27,7 +27,7 @@ graph TD
 
     subgraph "Durable Infrastructure"
         R[(Redis Shared State)]
-        DB[(PostgreSQL)]
+        DB[(SQLite Master Persistance)]
         VC[(ChromaDB)]
     end
 
@@ -122,7 +122,8 @@ cd LLM-Orchestrator
 Populate `.env` with the required URIs:
 ```env
 REDIS_URL=redis://localhost:6379
-DATABASE_URL=postgresql://user:pass@localhost/db
+DATABASE_URL=sqlite:///d:/llm_project/user.db
+# (Easily swappable for PostgreSQL in production)
 AI_ENGINE_URL=http://localhost:11434/v1/chat/completions
 DEFAULT_CHAT_MODEL=llama3.2:1b
 CHROMA_HOST=localhost

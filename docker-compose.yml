@@ -74,6 +74,8 @@ services:
     restart: always
     depends_on:
       - alertmanager
+      - nginx-exporter
+      - node-exporter
 
   # ── Alertmanager (alert routing → email/Slack) ────────────────────
   alertmanager:
@@ -159,6 +161,27 @@ services:
     restart: always
     depends_on:
       - redis
+
+  # ── Metrics Exporters ─────────────────────────────────────────────
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: llm_nginx_exporter
+    command:
+      - -nginx.scrape-uri=http://host.docker.internal:80/nginx_status
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: llm_node_exporter
+    command:
+      - '--path.rootfs=/host'
+    network_mode: host
+    pid: host
+    volumes:
+      - '/:/host:ro,rslave'
+    restart: always
 
 volumes:
   redis_data:

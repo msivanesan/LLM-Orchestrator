@@ -133,11 +133,22 @@ def _post_send(session_id: int, user_id: int,
     _index_safe(user_id, user_msg_id, user_content, session_id, 'user')
     _index_safe(user_id, ai_msg_id,   ai_content,   session_id, 'assistant')
 
-    # ── Memory extraction (best-effort, non-blocking) ──────────────────────
+    # ── Memory extraction (best-effort, non-blocking background thread) ──
     try:
-        extract_and_save(user_id, session_id, user_content, ai_content)
+        from threading import Thread
+        from flask import current_app
+        app = current_app._get_current_object()
+        
+        def run_async_extraction():
+            with app.app_context():
+                try:
+                    extract_and_save(user_id, session_id, user_content, ai_content)
+                except Exception:
+                    logger.debug('Async memory extraction failed')
+
+        Thread(target=run_async_extraction).start()
     except Exception:
-        logger.debug('Memory extraction skipped')
+        logger.debug('Failed to start memory extraction thread')
 
     new_title = None
     if is_first:

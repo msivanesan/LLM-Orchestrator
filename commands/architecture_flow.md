@@ -46,8 +46,8 @@ When a user types a message and clicks "Send", the following sequence occurs:
 
 The system employs a polyglot persistence strategy, using three different database engines for specific use-cases.
 
-### PostgreSQL (Relational Master State)
-- **Role**: Source of truth for users, chat histories, API keys, and extracted memories.
+### SQLite (Relational Master State)
+- **Role**: Source of truth for users, chat histories, API keys, and extracted memories. (Production-ready for PostgreSQL).
 - **Workflow**: 
   - All Flask microservices connect to it via `SQLAlchemy`. 
   - Standard CRUD API patterns (Create Session -> Save Message -> Select Messages).
