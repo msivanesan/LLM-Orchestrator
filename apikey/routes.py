@@ -144,3 +144,83 @@ def delete_key(key_id):
     db.session.delete(key)
     db.session.commit()
     return jsonify({"message": "Key deleted successfully"}), 200
+
+@apikey_bp.route('/validate', methods=['POST'])
+def validate_key():
+    """
+    Public validation endpoint for external services to check key validity and rate limits.
+    Expects JSON: {"key": "ak_..."}
+    """
+    data = request.get_json()
+    key_str = data.get('key')
+    
+    if not key_str:
+        return jsonify({"valid": False, "message": "Key is required"}), 400
+        
+    # 1. Check DB (or Redis cache for better performance)
+    key_record = ApiKey.query.filter_by(key=key_str).first()
+    
+    if not key_record:
+        return jsonify({"valid": False, "message": "Invalid API Key"}), 401
+        
+    if not key_record.is_active:
+        return jsonify({"valid": False, "message": "API Key is revoked"}), 403
+        
+    # 2. Rate Limiting Logic (Redis Sliding Window/Fixed Window)
+    # Current minute timestamp
+    from datetime import datetime
+    now = datetime.utcnow()
+    minute_timestamp = now.strftime('%Y%m%d%H%M')
+    redis_limit_key = f"rate_limit:{key_str}:{minute_timestamp}"
+    
+    try:
+        # Atomic Increment
+        current_requests = redis_client.incr(redis_limit_key)
+        
+        # Set expiry for the key if it's the first request of the minute
+        if current_requests == 1:
+            redis_client.expire(redis_limit_key, 60)
+            
+        if current_requests > key_record.rpm:
+            return jsonify({
+                "valid": True,
+                "allowed": False,
+                "message": "Rate limit exceeded (RPM limit reached)",
+                "limit": key_record.rpm,
+                "current": current_requests
+            }), 429
+            
+        return jsonify({
+            "valid": True,
+            "allowed": True,
+            "key_name": key_record.key_name,
+            "rpm_limit": key_record.rpm,
+            "remaining": max(0, key_record.rpm - current_requests)
+        }), 200
+        
+    except Exception as e:
+        # Fallback if Redis is down (fail open or fail closed depends on policy)
+        current_app.logger.error(f"Rate limiting error: {str(e)}")
+        return jsonify({"valid": True, "allowed": True, "message": "Validation warning: Rate checking unavailable"}), 200
+
+@apikey_bp.route('/validate_header', methods=['GET', 'POST'])
+def validate_header():
+    """Reads key from X-API-KEY header for Nginx auth_request."""
+    key_str = request.headers.get('X-API-KEY')
+    if not key_str or not ApiKey.query.filter_by(key=key_str, is_active=True).first():
+        return jsonify({"message": "Invalid or missing key"}), 401
+    
+    # Rate limit check
+    from datetime import datetime
+    now = datetime.utcnow()
+    redis_limit_key = f"rate_limit:{key_str}:{now.strftime('%Y%m%d%H%M')}"
+    key_record = ApiKey.query.filter_by(key=key_str).first()
+    
+    try:
+        if redis_client.incr(redis_limit_key) > key_record.rpm:
+            # We return 403 here because Nginx auth_request 
+            # only understands 401/403 as "denied".
+            return jsonify({"message": "Rate limit exceeded"}), 403
+        return "", 200
+    except:
+        return "", 200

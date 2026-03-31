@@ -38,7 +38,6 @@ def create_app():
     db.init_app(app)
     jwt = JWTManager(app)
     mail.init_app(app)
-    CORS(app)
 
     # Token Blocklist Loader
     @jwt.token_in_blocklist_loader

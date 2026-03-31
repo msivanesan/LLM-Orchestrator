@@ -26,7 +26,6 @@ def create_app():
     
     db.init_app(app)
     jwt = JWTManager(app)
-    CORS(app)
 
     # Logging Configuration
     log_file = os.getenv('APIKEY_SERVICE_LOG_FILE', 'logs/apikey_service.log')

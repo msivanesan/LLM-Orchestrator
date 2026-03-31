@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # 1. THE SECURITY GATEWAY
+  gateway:
+    image: nginx:latest
+    container_name: llm_orchestrator_gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    restart: always
+
+  # 2. THE DISTRIBUTED STATE (OTP & Rate Limits)
+  redis:
+    image: redis:7-alpine
+    container_name: llm_orchestrator_cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+    command: redis-server --appendonly yes
+
+volumes:
+  redis_data:

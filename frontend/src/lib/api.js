@@ -1,10 +1,9 @@
 import axios from 'axios';
 
-const USER_SERVICE = import.meta.env.VITE_USER_SERVICE_URL || 'http://127.0.0.1:5001';
-const APIKEY_SERVICE = import.meta.env.VITE_APIKEY_SERVICE_URL || 'http://127.0.0.1:5002';
+const GATEWAY = import.meta.env.VITE_API_GATEWAY || 'http://localhost:80';
 
-const API_BASE = `${USER_SERVICE}/api/users`;
-const APIKEY_BASE = `${APIKEY_SERVICE}/api/apikeys`;
+const API_BASE = `${GATEWAY}/api/users`;
+const APIKEY_BASE = `${GATEWAY}/api/apikeys`;
 
 export const ENDPOINTS = {
   LOGIN: `${API_BASE}/login`,
