@@ -1,5 +1,4 @@
 from flask import Flask, request
-from flask_cors import CORS
 from extensions import db, mail, redis_client
 from models import TokenBlocklist
 from routes import user_bp
@@ -12,14 +11,13 @@ from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
 from dotenv import load_dotenv
 
-# Allow importing shared apm module from project root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Add current folder to path to allow importing apm.py in Docker/Standalone
+sys.path.insert(0, os.path.dirname(__file__))
 
 load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    CORS(app)
 
     # ── Configuration ────────────────────────────────────────────────────────
     app.config.update(

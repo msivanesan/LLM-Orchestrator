@@ -15,7 +15,7 @@ const Layout = ({ user, onLogout, children }) => (
         <Link to="/dashboard"><LayoutDashboard size={18} /> Dashboard</Link>
         <Link to="/chat"><MessageSquare size={18} /> AI Chat</Link>
         <Link to="/users"><Users size={18} /> Users</Link>
-        {user.role === 'admin' && (
+        {user?.role === 'admin' && (
           <>
             <Link to="/keys"><Key size={18} /> API Keys</Link>
             <Link to="/users/create"><UserPlus size={18} /> Add User</Link>
@@ -30,8 +30,10 @@ const Layout = ({ user, onLogout, children }) => (
     <main className="content-area">
       <header className="top-header">
         <div className="user-profile-header">
-          <div className="user-avatar-small">{user.username.charAt(0).toUpperCase()}</div>
-          <span>{user.username} ({user.role})</span>
+          <div className="user-avatar-small">
+            {user?.username?.charAt(0).toUpperCase() || 'U'}
+          </div>
+          <span>{user?.username || 'User'} ({user?.role || 'member'})</span>
         </div>
       </header>
       <div className="page-content">{children}</div>

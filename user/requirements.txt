@@ -8,3 +8,5 @@ python-json-logger
 redis
 flask-mail
 gunicorn
+psycopg2-binary
+prometheus-client

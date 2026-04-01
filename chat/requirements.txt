@@ -1,10 +1,12 @@
 Flask
 Flask-SQLAlchemy
+Flask-Caching
 Flask-JWT-Extended
-python-json-logger
 redis
+requests
 python-dotenv
 gunicorn
 psycopg2-binary
+chromadb-client
+sentence-transformers
 prometheus-client
-

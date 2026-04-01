@@ -1,17 +1,13 @@
-"""
-Chat microservice application factory.
-"""
 import os
 import sys
+# Add current folder to path to allow importing apm.py in Docker/Standalone
+sys.path.insert(0, os.path.dirname(__file__))
 import logging
 import logging.config
 from flask import Flask, jsonify
 from dotenv import load_dotenv
 
-# Allow importing the shared apm module from project root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv()
 
 
 def create_app() -> Flask:
@@ -24,10 +20,14 @@ def create_app() -> Flask:
             'CHAT_DATABASE_URL', 'sqlite:///chat.db'
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        SQLALCHEMY_ENGINE_OPTIONS={
-            "pool_pre_ping": True,
-            "connect_args": {"check_same_thread": False},  # SQLite
-        },
+        SQLALCHEMY_ENGINE_OPTIONS=(
+            {"pool_pre_ping": True} 
+            if not os.getenv('CHAT_DATABASE_URL', '').startswith('sqlite')
+            else {
+                "pool_pre_ping": True,
+                "connect_args": {"check_same_thread": False},
+            }
+        ),
 
         # JWT (shared secret with user service)
         JWT_SECRET_KEY=os.getenv('JWT_SECRET_KEY', 'change-me-in-production'),

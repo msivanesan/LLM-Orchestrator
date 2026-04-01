@@ -1,6 +1,6 @@
 import requests, json, traceback
 
-base = 'http://localhost:5004'
+base = 'http://localhost'
 
 # 1. Health (no auth)
 r = requests.get(f'{base}/api/chat/health', timeout=5)

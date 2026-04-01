@@ -47,7 +47,8 @@ def run_server():
 def run_prod():
     """Start the service handles production traffic via Gunicorn."""
     port = os.getenv('APIKEY_SERVICE_PORT', '5002')
-    workers = os.cpu_count() * 2 + 1
+    # Try APIKEY-specific count, fall back to global, then default to 2
+    workers = int(os.getenv('APIKEY_WORKERS', os.getenv('GUNICORN_WORKERS', '2')))
     
     cmd = [
         'gunicorn',

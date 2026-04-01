@@ -1,14 +1,13 @@
+import sys
+import os
+# Add current folder to path to allow importing apm.py in Docker/Standalone
+sys.path.insert(0, os.path.dirname(__file__))
 from flask import Flask
 from routes import ai_bp
-import os
-import sys
 from dotenv import load_dotenv
 import logging
 
 load_dotenv()
-
-# Allow importing shared apm module from project root
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 def create_app():
     app = Flask(__name__)

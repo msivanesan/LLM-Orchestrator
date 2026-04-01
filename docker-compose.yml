@@ -15,6 +15,9 @@ services:
     depends_on:
       - redis
       - chromadb
+      - user
+      - apikey
+      - ai
     restart: always
 
   redis:
@@ -60,11 +63,6 @@ services:
       - IS_PERSISTENT=TRUE
       - ANONYMIZED_TELEMETRY=FALSE
     restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
   # ══════════════════════════════════════════════════════════════════
   # APM STACK
@@ -162,7 +160,8 @@ services:
     #           count: 1
     #           capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      # Use the native ollama binary to check health
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -184,10 +183,110 @@ services:
     image: nginx/nginx-prometheus-exporter:latest
     container_name: llm_nginx_exporter
     command:
-      - -nginx.scrape-uri=http://host.docker.internal:80/nginx_status
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - -nginx.scrape-uri=http://gateway:80/nginx_status
     restart: always
+
+  # ══════════════════════════════════════════════════════════════════
+  # BACKEND MICROSERVICES
+  # ══════════════════════════════════════════════════════════════════
+
+  user:
+    build: ./user
+    image: llm-user:latest
+    container_name: llm_orchestrator_user
+    ports:
+      - "5001:5001"
+    environment:
+      - USER_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-llm_orchestrator}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - USER_SERVICE_PORT=5001
+      - APM_LOGGING_ENABLED=${APM_LOGGING_ENABLED:-True}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: always
+
+  apikey:
+    build: ./apikey
+    image: llm-apikey:latest
+    container_name: llm_orchestrator_apikey
+    ports:
+      - "5002:5002"
+    environment:
+      - APIKEY_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-llm_orchestrator}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - APIKEY_SERVICE_PORT=5002
+      - APM_LOGGING_ENABLED=${APM_LOGGING_ENABLED:-True}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: always
+
+  mailer:
+    build: ./mailer
+    image: llm-mailer:latest
+    container_name: llm_orchestrator_mailer
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MAIL_SERVER=${MAIL_SERVER}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USE_TLS=${MAIL_USE_TLS}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - MAIL_DEFAULT_SENDER=${MAIL_DEFAULT_SENDER}
+    depends_on:
+      redis:
+        condition: service_started
+    restart: always
+
+  ai:
+    build: ./ai
+    image: llm-ai:latest
+    container_name: llm_orchestrator_ai
+    ports:
+      - "5003:5003"
+    environment:
+      - AI_ENGINE_URL=http://ollama:11434/v1/chat/completions
+      - AI_SERVICE_PORT=5003
+      - APM_LOGGING_ENABLED=${APM_LOGGING_ENABLED:-True}
+      - GUNICORN_WORKERS=${AI_WORKERS:-2}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: always
+
+  chat:
+    build: ./chat
+    image: llm-chat:latest
+    container_name: llm_orchestrator_chat
+    ports:
+      - "5004:5004"
+    environment:
+      - CHAT_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-llm_orchestrator}
+      - REDIS_URL=redis://redis:6379/0
+      - CHAT_SERVICE_PORT=5004
+      - SECRET_KEY=${SECRET_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - AI_SERVICE_URL=http://ai:5003
+      - APM_LOGGING_ENABLED=${APM_LOGGING_ENABLED:-True}
+      - GUNICORN_WORKERS=${CHAT_WORKERS:-4}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      ai:
+        condition: service_started
+    restart: always
+
 
   # node-exporter:
   #   image: prom/node-exporter:latest

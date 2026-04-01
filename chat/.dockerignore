@@ -1,0 +1,17 @@
+# --- IGNORE ALL ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+.env.*
+.dockerignore
+Dockerfile
+README.md
+logs/
+*.pid
+*.db
+*.sqlite3
+.vscode/
+.idea/
+instance/

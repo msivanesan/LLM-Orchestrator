@@ -1,10 +1,12 @@
+import sys
+import os
+# Add current folder to path to allow importing apm.py in Docker/Standalone
+sys.path.insert(0, os.path.dirname(__file__))
 from flask import Flask, request
-from flask_cors import CORS
 from models import db, ApiKey
 from routes import apikey_bp
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
-import os
 import logging
 from logging.handlers import RotatingFileHandler
 from pythonjsonlogger import jsonlogger
@@ -48,8 +50,6 @@ def create_app():
 
     # APM
     try:
-        import sys
-        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
         from apm import setup_metrics
         setup_metrics(app, service_name='apikey')
     except Exception as e:

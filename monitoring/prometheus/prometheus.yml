@@ -38,7 +38,7 @@ scrape_configs:
   - job_name: 'user-service'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['host.docker.internal:5001']
+      - targets: ['user:5001']
         labels:
           service: 'user'
           port:    '5001'
@@ -47,7 +47,7 @@ scrape_configs:
   - job_name: 'apikey-service'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['host.docker.internal:5002']
+      - targets: ['apikey:5002']
         labels:
           service: 'apikey'
           port:    '5002'
@@ -61,15 +61,15 @@ scrape_configs:
           service: 'ai'
           port:    '5003'
 
-  # ── Chat Service (Flask :5004) ────────────────────────────────────────────────
-  - job_name: 'chat-service'
-    metrics_path: '/metrics'
-    scrape_interval: 10s   # scrape more frequently (active service)
-    static_configs:
-      - targets: ['host.docker.internal:5004']
-        labels:
-          service: 'chat'
-          port:    '5004'
+  # # ── Chat Service (Flask :5004) ────────────────────────────────────────────────
+  # - job_name: 'chat-service'
+  #   metrics_path: '/metrics'
+  #   scrape_interval: 10s   # scrape more frequently (active service)
+  #   static_configs:
+  #     - targets: ['chat:5004']
+  #       labels:
+  #         service: 'chat'
+  #         port:    '5004'
 
   # ── Redis ─────────────────────────────────────────────────────────────────────
   - job_name: 'redis'

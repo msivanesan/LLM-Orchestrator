@@ -39,7 +39,8 @@ def run_server():
 def run_prod():
     """Start the service handles production traffic via Gunicorn."""
     port = os.getenv('AI_SERVICE_PORT', '5003')
-    workers = os.cpu_count() * 2 + 1
+    # Try AI-specific count, fall back to global, then default to 2
+    workers = int(os.getenv('AI_WORKERS', os.getenv('GUNICORN_WORKERS', '2')))
     
     cmd = [
         'gunicorn',
