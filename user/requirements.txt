@@ -7,3 +7,4 @@ Flask-JWT-Extended
 python-json-logger
 redis
 flask-mail
+gunicorn

@@ -11,7 +11,7 @@ import json
 import logging
 from typing import List, Dict, Optional
 
-from .extensions import redis_client
+from extensions import redis_client
 
 logger = logging.getLogger(__name__)
 

@@ -10,14 +10,15 @@ The User Service is the central identity provider for the ecosystem. It handles 
 
 ## 🛠️ Configuration
 Required in `.env`:
--   `DATABASE_URL`: Path to your database (supports SQLite/PostgreSQL).
+-   `USER_DATABASE_URL`: Connection string (PostgreSQL recommended).
 -   `JWT_SECRET_KEY`: Secret string for token signing.
 -   `USER_SERVICE_PORT`: Defaults to 5001.
 
 ## 🏃 Operation
-### Start the Service
-```bash
-python -m user.manage runserver
+### Start the Service (Standalone)
+```powershell
+cd user
+python .\manage.py runserver
 ```
 
 ## 📡 Notable Endpoints

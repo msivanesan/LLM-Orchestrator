@@ -14,7 +14,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
-AI_ENGINE_URL   = os.getenv('AI_ENGINE_URL',       'https://192.168.5.23/ai/v1/chat/completions')
+AI_ENGINE_URL   = os.getenv('AI_ENGINE_URL',       'http://localhost:11434/v1/chat/completions')
 AI_SERVICE_URL  = os.getenv('AI_SERVICE_URL',      'http://localhost:5003')
 AI_TIMEOUT      = int(os.getenv('AI_SERVICE_TIMEOUT', '90'))
 DEFAULT_MODEL   = os.getenv('DEFAULT_CHAT_MODEL',  'llama3-7b')

@@ -9,14 +9,15 @@ The Mailer Service is a durable background worker that handles email delivery fo
 -   **Safe Management**: Includes a custom CLI for starting and stopping the background process with PID tracking.
 
 ## 🏃 Operation
-### Start the Worker
-```bash
-python -m mailer.manage runserver
+### Start the Worker (Standalone)
+```powershell
+cd mailer
+python .\manage.py runworker
 ```
 
 ### Stop the Worker
-```bash
-python -m mailer.manage stop
+```powershell
+python .\manage.py stop
 ```
 
 ## 🛠️ Configuration

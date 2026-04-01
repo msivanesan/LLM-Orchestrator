@@ -1,7 +1,7 @@
 from flask import Flask, request
 from flask_cors import CORS
-from .models import db, ApiKey
-from .routes import apikey_bp
+from models import db, ApiKey
+from routes import apikey_bp
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 import os

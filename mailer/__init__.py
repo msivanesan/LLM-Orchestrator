@@ -1,1 +1,1 @@
-from .main import run_worker
+from main import run_worker

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from .models import db, User, TokenBlocklist
+from models import db, User, TokenBlocklist
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import (
     create_access_token, 
@@ -9,7 +9,7 @@ from flask_jwt_extended import (
     get_jwt
 )
 from flask_mail import Message
-from .extensions import db, mail, redis_client
+from extensions import db, mail, redis_client
 from flask import current_app
 import random
 import json

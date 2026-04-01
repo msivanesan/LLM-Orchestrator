@@ -1,5 +1,5 @@
 from flask import Flask
-from .routes import ai_bp
+from routes import ai_bp
 import os
 import sys
 from dotenv import load_dotenv

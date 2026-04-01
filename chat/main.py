@@ -46,7 +46,7 @@ def create_app() -> Flask:
     )
 
     # ── Extensions ───────────────────────────────────────────────────────────
-    from .extensions import db, jwt, cache
+    from extensions import db, jwt, cache
     db.init_app(app)
     jwt.init_app(app)
     cache.init_app(app)
@@ -55,11 +55,11 @@ def create_app() -> Flask:
     _configure_logging(app)
 
     # ── Blueprints ───────────────────────────────────────────────────────────
-    from .routes import chat_bp
+    from routes import chat_bp
     app.register_blueprint(chat_bp, url_prefix='/api/chat')
 
     # ── Create DB tables ─────────────────────────────────────────────────────
-    from . import models, memory_model   # ensure all models are registered
+    import models, memory_model   # ensure all models are registered
     with app.app_context():
         db.create_all()
 

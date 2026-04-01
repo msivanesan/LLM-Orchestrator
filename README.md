@@ -27,8 +27,8 @@ graph TD
 
     subgraph "Durable Infrastructure"
         R[(Redis Shared State)]
-        DB[(SQLite Master Persistance)]
-        VC[(ChromaDB)]
+        DB[(PostgreSQL Primary Persistence)]
+        VC[(ChromaDB Vector Store)]
     end
 
     subgraph "Observability (APM)"
@@ -89,64 +89,59 @@ graph TD
 
 ## 🛰️ Microservice Deep-Dive
 
-### 1. 💬 Chat Service (Port 5004)
-The stateful orchestration core.
-- Manages SQLAlchemy integration, chat sessions, Server-Sent Events (SSE) streaming, and automatic model-title generation.
-- Controls vector inserts and semantic context limits to respect LLM context token windows.
-
-### 2. 🆔 User Service (Port 5001)
-The primary identity provider (IdP).
-- **Stateless Auth**: Issues and validates JWTs for cross-service authentication.
-- **Hardening**: Implements brute-force and password-reset protection flows.
-
-### 3. 🔑 ApiKey & Rate-Limiting Service (Port 5002)
-The "Traffic Warden" for external integrations.
-- Uses high-performance Redis atomic increments with TTL (60s) to perform sub-millisecond RPM (Requests Per Minute) limiting without causing Redis memory accumulation.
-
-### 4. 🤖 AI Proxy Service (Port 5003)
-A unified AI compatibility layer.
-- Actively polls the local inference engine (like Ollama) for available models and proxies them nicely formatted to the Chat Service.
+### 💬 Platform Services (Ports 5001-5004)
+The ecosystem consists of five independent services, each with its own management layer:
+1. **🆔 User Service (5001)**: Identity provider using PostgreSQL.
+2. **🔑 ApiKey Service (5002)**: Integration & Rate-Limiting.
+3. **🤖 AI Service (5003)**: Model Orchestration & Discovery.
+4. **💬 Chat Service (5004)**: Persistent Memory & RAG.
+5. **📬 Mailer Service**: Background Redis Worker for communications.
 
 ---
 
 ## 🚀 Installation & Deployment
 
 ### 1. Requirements
-Ensure you have **Python 3.10+**, **Node.js**, and **Docker / Docker Compose** installed.
+Ensure you have **Python 3.12+**, **PostgreSQL**, **Redis**, and **Ollama** (or vLLM) installed.
 
 ### 2. Environment Setup
 ```bash
 git clone https://github.com/msivanesan/LLM-Orchestrator.git
 cd LLM-Orchestrator
 ```
-Populate `.env` with the required URIs:
+Populate `.env` with your PostgreSQL URIs:
 ```env
-REDIS_URL=redis://localhost:6379
-DATABASE_URL=sqlite:///d:/llm_project/user.db
-# (Easily swappable for PostgreSQL in production)
+USER_DATABASE_URL=postgresql://user:pass@localhost:5432/llm_db
+APIKEY_DATABASE_URL=postgresql://user:pass@localhost:5432/llm_db
+REDIS_URL=redis://localhost:6379/0
 AI_ENGINE_URL=http://localhost:11434/v1/chat/completions
-DEFAULT_CHAT_MODEL=llama3.2:1b
-CHROMA_HOST=localhost
 ```
 
-### 3. Start Infrastructure & Observability
-Boot the full APM, Gateway, and LLM framework using Docker Compose:
+### 3. Start Infrastructure
+Boot the gateway and monitoring stack:
 ```bash
 docker compose up -d
 ```
-*(Optionally, pull your local model: `docker exec llm_ollama ollama pull llama3.2:1b`)*
 
-### 4. Run Microservices
-Activate your `venv` and boot the Python services natively.
+### 4. Run Microservices (Standalone Mode)
+Each service can now be run independently from its own directory:
 ```bash
-python -m user.manage runserver
-python -m apikey.manage runserver
-python -m ai.manage runserver
-python -m chat.manage runserver
+# Identity Service
+cd user && python .\manage.py runserver
+
+# Persistence Layer
+cd chat && python .\manage.py runserver
+
+# AI Proxy
+cd ai && python .\manage.py runserver
+
+# Integration Layer
+cd apikey && python .\manage.py runserver
 ```
 
 ### 5. Start the React Frontend
 ```bash
+# From root
 cd frontend && npm install && npm run dev
 ```
 

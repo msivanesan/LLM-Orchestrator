@@ -9,7 +9,7 @@ Examples of facts stored:
   preferences → "Prefers concise answers"
 """
 from datetime import datetime
-from .extensions import db
+from extensions import db
 
 
 class UserMemory(db.Model):

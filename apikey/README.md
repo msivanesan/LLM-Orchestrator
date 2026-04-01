@@ -10,14 +10,20 @@ This service manages external API credentials and enforces usage policies across
 
 ## 🛠️ Configuration
 Required in `.env`:
--   `REDIS_URL`: Link to your Redis instance.
--   `APIKEY_DATABASE_URL`: Path to the SQLite/PostgreSQL database.
+-   `APIKEY_DATABASE_URL`: Connection string (PostgreSQL).
+-   `REDIS_URL`: Shared caching and rate-limiting store.
 -   `APIKEY_SERVICE_PORT`: Defaults to 5002.
 
 ## 🏃 Operation
-### Start the Service
-```bash
-python -m apikey.manage runserver
+### Start the Service (Standalone)
+```powershell
+cd apikey
+python .\manage.py runserver
+```
+
+### Production Mode
+```powershell
+python .\manage.py runprod
 ```
 
 ## 📡 Notable Endpoints

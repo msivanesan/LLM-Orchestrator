@@ -10,6 +10,7 @@
 # --- LOGS ---
 logs/
 *.log
+*.pid
 
 # --- PYTHON ---
 __pycache__/

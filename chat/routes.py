@@ -16,20 +16,20 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from sqlalchemy import update as sa_update
 from sqlalchemy.exc import SQLAlchemyError
 
-from .extensions import db
-from .models import ChatSession, ChatMessage
-from .memory_model import UserMemory
-from .memory import (
+from extensions import db
+from models import ChatSession, ChatMessage
+from memory_model import UserMemory
+from memory import (
     get_memory_list, upsert_memory, delete_memory, clear_all_memory,
     extract_and_save, build_system_prompt_with_memory,
 )
-from .cache import (
+from cache import (
     cache_user_sessions, get_cached_user_sessions, invalidate_user_sessions,
     cache_session_messages, get_cached_session_messages, invalidate_session_messages,
     push_message_to_context, get_context_window, invalidate_context, redis_ping,
 )
-from .vector_store import upsert_message, query_context, delete_session_vectors, chroma_health
-from .llm_client import (
+from vector_store import upsert_message, query_context, delete_session_vectors, chroma_health
+from llm_client import (
     chat_completion, chat_completion_stream, generate_title,
     ai_service_health, list_available_models,
 )
@@ -168,7 +168,7 @@ def _post_send(session_id: int, user_id: int,
 
 def _system_prompt_for(user_id: int) -> str:
     """Return the base system prompt enriched with the user's persistent memory."""
-    from .llm_client import SYSTEM_PROMPT
+    from llm_client import SYSTEM_PROMPT
     return build_system_prompt_with_memory(SYSTEM_PROMPT, user_id)
 
 

@@ -1,6 +1,6 @@
 import json
 import time
-from .main import create_app, mail, redis_client
+from main import create_app, mail, redis_client
 from flask_mail import Message
 
 def run_worker():

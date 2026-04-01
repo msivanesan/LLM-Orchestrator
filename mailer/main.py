@@ -3,7 +3,7 @@ from flask_mail import Mail, Message
 import redis
 import json
 import os
-from .templates import (
+from templates import (
     get_otp_template, 
     get_apikey_template, 
     get_welcome_template, 

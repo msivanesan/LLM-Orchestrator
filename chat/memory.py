@@ -7,8 +7,8 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from .extensions import db
-from .memory_model import UserMemory
+from extensions import db
+from memory_model import UserMemory
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def extract_and_save(user_id: int, session_id: int,
     Returns the dict of newly extracted facts (may be empty).
     Best-effort — never raises.
     """
-    from .llm_client import chat_completion  # local import to avoid circular
+    from llm_client import chat_completion  # local import to avoid circular
 
     schema_lines = "\n".join(f"  {k}: {v}" for k, v in MEMORY_SCHEMA.items())
     conversation = f"User: {user_message}\nAssistant: {assistant_reply}"

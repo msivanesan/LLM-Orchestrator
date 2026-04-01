@@ -3,7 +3,7 @@ import secrets
 import json
 import redis
 import os
-from .models import db, ApiKey
+from models import db, ApiKey
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 
 apikey_bp = Blueprint('apikeys', __name__)

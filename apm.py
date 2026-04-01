@@ -168,7 +168,7 @@ def setup_metrics(app, service_name: str):
         if exc is not None:
             ACTIVE_REQUESTS.labels(service=service_name).dec()
 
-    logger.info('APM metrics enabled for service: %s  →  GET /metrics', service_name)
+    logger.info('APM metrics enabled for service: %s  ->  GET /metrics', service_name)
     return app
 
 

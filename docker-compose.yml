@@ -27,6 +27,24 @@ services:
     restart: always
     command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: llm_orchestrator_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres123}
+      - POSTGRES_DB=${DB_NAME:-llm_orchestrator}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   chromadb:
     image: chromadb/chroma:latest
     container_name: llm_orchestrator_chromadb
@@ -75,7 +93,6 @@ services:
     depends_on:
       - alertmanager
       - nginx-exporter
-      - node-exporter
 
   # ── Alertmanager (alert routing → email/Slack) ────────────────────
   alertmanager:
@@ -172,19 +189,20 @@ services:
       - "host.docker.internal:host-gateway"
     restart: always
 
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: llm_node_exporter
-    command:
-      - '--path.rootfs=/host'
-    network_mode: host
-    pid: host
-    volumes:
-      - '/:/host:ro,rslave'
-    restart: always
+  # node-exporter:
+  #   image: prom/node-exporter:latest
+  #   container_name: llm_node_exporter
+  #   command:
+  #     - '--path.rootfs=/host'
+  #   network_mode: host
+  #   pid: host
+  #   volumes:
+  #     - '/:/host:ro,rslave'
+  #   restart: always
 
 volumes:
   redis_data:
+  postgres_data:
   chroma_data:
   prometheus_data:
   grafana_data:

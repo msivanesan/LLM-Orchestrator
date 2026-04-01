@@ -8,7 +8,7 @@ GATEWAY_URL = "http://localhost"
 LOGIN_USER = "admin"  # Changed from email to username
 LOGIN_PASS = "1234"
 # External API Key (Create one in the dashboard and paste here if testing API directly)
-TEST_API_KEY = "ak_9b8c02cc0e0add6ac78e26a789c74a189cb0a7b0179f795d"
+TEST_API_KEY = "ak_02b8386786d84a6e7dd745de2b53f57277a9c52b15868ddf"
 
 def print_header(title):
     print(f"\n🚀 {title}")

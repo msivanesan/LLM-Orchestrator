@@ -8,14 +8,20 @@ The AI Orchestration Service is a Gemini-compatible middleware that manages inte
 -   **Auth Request Compatibility**: Designed to work with Nginx `auth_request` for API key validation.
 
 ## 🛠️ Configuration
-The service uses the following environment variables:
--   `AI_ENGINE_URL`: The URL of the external inference engine (e.g., `https://192.168.5.23/ai/v1/chat/completions`).
--   `AI_SERVICE_PORT`: Port to run the Flask app (Default: 5003).
+Required in `.env`:
+-   `AI_ENGINE_URL`: The URL of the downstream inference engine (Ollama/vLLM).
+-   `AI_SERVICE_PORT`: Defaults to 5003.
 
 ## 🏃 Operation
-### Start the Service
-```bash
-python -m ai.manage runserver
+### Start the Service (Standalone)
+```powershell
+cd ai
+python .\manage.py runserver
+```
+
+### Production Mode
+```powershell
+python .\manage.py runprod
 ```
 
 ## 📡 API Endpoints

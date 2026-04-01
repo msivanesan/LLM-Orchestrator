@@ -4,13 +4,15 @@ Chat Service management tool.
 Usage
 -----
 python -m chat.manage init_db      # create DB tables
-python -m chat.manage runserver    # start Flask dev server
+python -m chat.manage runserver    # start Flask dev server (NOT for prod)
+python -m chat.manage runprod      # start production server (Gunicorn)
 python -m chat.manage stop         # stop running server via PID file
 """
 import argparse
 import os
 import sys
 import signal
+import subprocess
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -19,8 +21,8 @@ PID_FILE = os.path.join(os.path.dirname(__file__), '..', 'chat.pid')
 
 
 def init_db():
-    from .main import create_app
-    from .extensions import db
+    from main import create_app
+    from extensions import db
     app = create_app()
     with app.app_context():
         db.create_all()
@@ -28,7 +30,7 @@ def init_db():
 
 
 def run_server():
-    from .main import create_app
+    from main import create_app
     app  = create_app()
     port = int(os.getenv('CHAT_SERVICE_PORT', 5004))
 
@@ -43,6 +45,30 @@ def run_server():
             os.remove(PID_FILE)
 
 
+def run_prod():
+    """Start the service handles production traffic via Gunicorn."""
+    port = os.getenv('CHAT_SERVICE_PORT', '5004')
+    workers = os.cpu_count() * 2 + 1
+    
+    cmd = [
+        'gunicorn',
+        '--workers', str(workers),
+        '--bind', f'0.0.0.0:{port}',
+        '--access-logfile', '-',
+        '--error-logfile', '-',
+        '--timeout', '120',
+        'main:create_app()'
+    ]
+    
+    print(f"🔥 Starting PRODUCTION server (Gunicorn) on port {port} with {workers} workers...")
+    try:
+        subprocess.run(cmd, check=True)
+    except FileNotFoundError:
+        print("❌ Error: 'gunicorn' not found. Install it with: pip install gunicorn")
+    except KeyboardInterrupt:
+        print("\n👋 Production server stopped.")
+
+
 def stop():
     if not os.path.exists(PID_FILE):
         print("❌ Chat Service not running (no PID file).")
@@ -51,7 +77,6 @@ def stop():
         pid = int(f.read().strip())
     try:
         if sys.platform == 'win32':
-            import subprocess
             subprocess.run(['taskkill', '/F', '/PID', str(pid)], check=True)
         else:
             os.kill(pid, signal.SIGTERM)
@@ -68,7 +93,8 @@ if __name__ == '__main__':
     sub    = parser.add_subparsers(dest='cmd')
 
     sub.add_parser('init_db',   help='Create database tables')
-    sub.add_parser('runserver', help='Start the service')
+    sub.add_parser('runserver', help='Start the dev service')
+    sub.add_parser('runprod',   help='Start the production service (Gunicorn)')
     sub.add_parser('stop',      help='Stop the running service')
 
     args = parser.parse_args()
@@ -77,6 +103,8 @@ if __name__ == '__main__':
         init_db()
     elif args.cmd == 'runserver':
         run_server()
+    elif args.cmd == 'runprod':
+        run_prod()
     elif args.cmd == 'stop':
         stop()
     else:

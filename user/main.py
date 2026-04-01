@@ -1,8 +1,8 @@
 from flask import Flask, request
 from flask_cors import CORS
-from .extensions import db, mail, redis_client
-from .models import TokenBlocklist
-from .routes import user_bp
+from extensions import db, mail, redis_client
+from models import TokenBlocklist
+from routes import user_bp
 from flask_jwt_extended import JWTManager
 from datetime import timedelta
 import os
@@ -19,10 +19,19 @@ load_dotenv()
 
 def create_app():
     app = Flask(__name__)
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-    app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'your-jwt-secret-key')
+    CORS(app)
+
+    # ── Configuration ────────────────────────────────────────────────────────
+    app.config.update(
+        # Database
+        SQLALCHEMY_DATABASE_URI=os.getenv(
+            'USER_DATABASE_URL', os.getenv('DATABASE_URL', 'sqlite:///user.db')
+        ),
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        # JWT (shared secret with user service)
+        JWT_SECRET_KEY=os.getenv('JWT_SECRET_KEY', 'change-me-in-production'),
+        SECRET_KEY=os.getenv('SECRET_KEY', 'flask-secret'),
+    )
     
     # Expiry settings from .env
     access_minutes = int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES_MINUTES', 7))

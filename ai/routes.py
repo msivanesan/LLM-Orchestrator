@@ -10,7 +10,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 ai_bp = Blueprint('ai_bp', __name__)
 
 # --- CONFIGURATION ---
-DEFAULT_ENGINE = 'https://192.168.5.23/ai/v1/chat/completions'
+DEFAULT_ENGINE = 'http://localhost:11434/v1/chat/completions'
 AI_ENGINE_URL = os.getenv('AI_ENGINE_URL', DEFAULT_ENGINE)
 
 # Model Registry (Local LLM via Ollama/vLLM)
