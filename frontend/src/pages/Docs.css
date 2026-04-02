@@ -15,6 +15,7 @@
 
 .docs-page {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background: var(--bg-color);
   color: var(--text-main);
@@ -40,10 +41,67 @@
   color: var(--primary);
 }
 
+.docs-topbar-login {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.docs-topbar-login:hover { opacity: 0.75; }
+
 .docs-layout {
   display: grid;
   grid-template-columns: 260px 1fr;
   flex: 1;
+  min-height: 0;
+}
+
+.docs-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.docs-callout.warn {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+}
+
+.docs-path-param {
+  color: var(--primary);
+  font-style: italic;
+}
+
+.docs-param-name {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--primary);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.docs-param-type {
+  color: #34d399;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.docs-param-desc {
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.docs-nav-chevron {
+  margin-left: auto;
 }
 
 .docs-sidebar {

@@ -45,6 +45,20 @@ Conversation to analyse:
 {conversation}
 """.strip()
 
+SUMMARIZATION_PROMPT = """You are a memory archivist. Your job is to update a concise summary of a conversation.
+
+Previous Summary:
+{old_summary}
+
+New Messages to incorporate:
+{new_messages}
+
+Task:
+Produce a single, cohesive, ultra-concise summary (max 300 words) that captures all important facts, decisions, and context from the session so far. Do NOT lose important details mentioned in the previous summary, but merge them with the new messages.
+
+Return ONLY the updated summary text. No preamble, no markers.
+""".strip()
+
 
 # ── Load memory for a user ─────────────────────────────────────────────────────
 
@@ -80,15 +94,72 @@ def build_memory_block(user_id: int) -> Optional[str]:
     return "\n".join(lines)
 
 
-def build_system_prompt_with_memory(base_prompt: str, user_id: int) -> str:
-    """Prepend the user memory block to the base system prompt."""
-    block = build_memory_block(user_id)
-    if block:
-        return block + "\n---\n\n" + base_prompt
+def build_system_prompt_with_history(base_prompt: str, user_id: int, session_id: int) -> str:
+    """
+    Enrich the system prompt with:
+    1. Persistent User Memory (Layer 4)
+    2. Session-Specific Summary (Layer 3.5 - The bridge between RAG & Window)
+    """
+    from models import ChatSession
+    session = ChatSession.query.get(session_id)
+    summary = (session.summary or '').strip() if session else ''
+
+    memory_block = build_memory_block(user_id) or ''
+    summary_block = ("## Session Summary So Far\n" + summary + "\n\n") if summary else ""
+
+    if memory_block or summary_block:
+        return (memory_block + "---\n" + summary_block + "---\n\n" + base_prompt)
     return base_prompt
 
 
 # ── Extract and save new facts ─────────────────────────────────────────────────
+
+def summarize_session(session_id: int, model_id: str):
+    """
+    Update the 'summary' field of a ChatSession.
+    Called in the background every N messages.
+    """
+    from llm_client import chat_completion
+    from models import ChatSession, ChatMessage
+    from sqlalchemy import update as sa_update
+
+    session = ChatSession.query.get(session_id)
+    if not session: return
+
+    # Get the last 20 messages to summarize
+    msgs = (ChatMessage.query.filter_by(session_id=session_id)
+            .order_by(ChatMessage.created_at.desc()).limit(20).all())
+    msgs.reverse() # Back to chronological
+
+    if not msgs: return
+
+    new_msg_text = "\n".join([f"{m.role}: {m.content}" for m in msgs])
+    
+    prompt = SUMMARIZATION_PROMPT.format(
+        old_summary=(session.summary or 'No summary yet.'),
+        new_messages=new_msg_text
+    )
+
+    try:
+        result = chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            model=model_id,
+            temperature=0.2,
+            max_tokens=600,
+            system_prompt="You are a precise conversation summarizer.",
+        )
+        final_summary = result["content"].strip()
+        
+        if final_summary:
+            db.session.execute(
+                sa_update(ChatSession)
+                .where(ChatSession.id == session_id)
+                .values(summary=final_summary)
+            )
+            db.session.commit()
+            logger.info("Session %s summary updated (%d chars)", session_id, len(final_summary))
+    except Exception:
+        logger.exception("Failed to update summary for session %s", session_id)
 
 def extract_and_save(user_id: int, session_id: int,
                      user_message: str, assistant_reply: str,

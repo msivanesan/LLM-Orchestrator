@@ -21,12 +21,13 @@ from models import ChatSession, ChatMessage
 from memory_model import UserMemory
 from memory import (
     get_memory_list, upsert_memory, delete_memory, clear_all_memory,
-    extract_and_save, build_system_prompt_with_memory,
+    extract_and_save, build_system_prompt_with_history, summarize_session,
 )
 from cache import (
     cache_user_sessions, get_cached_user_sessions, invalidate_user_sessions,
     cache_session_messages, get_cached_session_messages, invalidate_session_messages,
     push_message_to_context, get_context_window, invalidate_context, redis_ping,
+    is_context_warm, warm_context_from_db, trim_messages_to_token_budget, MAX_CTX_MSGS,
 )
 from vector_store import upsert_message, query_context, delete_session_vectors, chroma_health
 from llm_client import (
@@ -36,8 +37,6 @@ from llm_client import (
 
 logger  = logging.getLogger(__name__)
 chat_bp = Blueprint('chat', __name__)
-
-MAX_CTX_MSGS = 20
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -101,10 +100,41 @@ def _index_safe(user_id: int, msg_id: int, content: str, session_id: int, role: 
         logger.exception('VectorDB index failed msg=%s', msg_id)
 
 
+def _ensure_context_warm(session_id: int) -> None:
+    """
+    If the Redis context window is cold (empty due to restart or TTL expiry),
+    reload it from the database so the LLM receives the full conversation history.
+    """
+    if not is_context_warm(session_id):
+        db_msgs = (ChatMessage.query
+                   .filter_by(session_id=session_id)
+                   .order_by(ChatMessage.created_at.asc())
+                   .with_entities(ChatMessage.role, ChatMessage.content)
+                   .all())
+        if db_msgs:
+            msg_dicts = [{'role': r, 'content': c} for r, c in db_msgs]
+            warm_context_from_db(session_id, msg_dicts)
+            logger.info('Context rehydrated from DB for session %s (%d msgs)', session_id, len(msg_dicts))
+
+
 def _build_llm_messages(session_id: int, user_id: int, current_content: str,
                          use_context: bool = True) -> list:
+    """
+    Build the message list for the LLM:
+    1. Warm the Redis context from DB if cold (server restart / TTL expired).
+    2. Load the rolling context window from Redis.
+    3. Optionally enrich with semantically relevant messages from VectorDB.
+    4. Trim to token budget so we never exceed the context window.
+    5. Append the current user message.
+    """
+    # Step 1: Rehydrate from DB if the context window is cold
+    _ensure_context_warm(session_id)
+
+    # Step 2: Load the rolling window from Redis
     window = list(get_context_window(session_id))
+
     if use_context:
+        # Step 3: Query VectorDB for semantically relevant past messages
         relevant = query_context(user_id, current_content, n_results=5, session_id=session_id)
         existing = {m['content'] for m in window}
         extra    = [{'role': r['role'], 'content': r['content']}
@@ -112,8 +142,14 @@ def _build_llm_messages(session_id: int, user_id: int, current_content: str,
         messages = extra + window
     else:
         messages = window
+
+    # Step 4: Trim to token budget — drop oldest first, keep at least 1
+    messages = trim_messages_to_token_budget(messages)
+
+    # Step 5: Append current user message if not already present
     if not messages or messages[-1].get('content') != current_content:
         messages.append({'role': 'user', 'content': current_content})
+
     return messages
 
 
@@ -139,14 +175,21 @@ def _post_send(session_id: int, user_id: int,
         from flask import current_app
         app = current_app._get_current_object()
         
-        def run_async_extraction():
+        def run_async_bg():
             with app.app_context():
                 try:
+                    # 1. Fact Extraction
+                    from memory import extract_and_save, summarize_session
                     extract_and_save(user_id, session_id, user_content, ai_content, model)
+                    
+                    # 2. Periodic Summarization (every 10 msgs)
+                    msg_count = ChatMessage.query.filter_by(session_id=session_id).count()
+                    if msg_count > 0 and msg_count % 10 == 0:
+                        summarize_session(session_id, model)
                 except Exception:
-                    logger.debug('Async memory extraction failed')
+                    logger.debug('Async background worker (memory/summary) failed')
 
-        Thread(target=run_async_extraction).start()
+        Thread(target=run_async_bg).start()
     except Exception:
         logger.debug('Failed to start memory extraction thread')
 
@@ -166,10 +209,10 @@ def _post_send(session_id: int, user_id: int,
     return new_title
 
 
-def _system_prompt_for(user_id: int) -> str:
-    """Return the base system prompt enriched with the user's persistent memory."""
+def _system_prompt_for(user_id: int, session_id: int) -> str:
+    """Return the base system prompt enriched with the user's persistent memory and session summary."""
     from llm_client import SYSTEM_PROMPT
-    return build_system_prompt_with_memory(SYSTEM_PROMPT, user_id)
+    return build_system_prompt_with_history(SYSTEM_PROMPT, user_id, session_id)
 
 
 @chat_bp.get('/memory')
@@ -393,7 +436,7 @@ def quick_stream():
         return _err(f'Setup error: {str(e)}', 500)
 
     # Build memory-enriched system prompt BEFORE generator (safe — no ORM inside gen)
-    sys_prompt = _system_prompt_for(user_id)
+    sys_prompt = _system_prompt_for(user_id, session_id)
 
     # ── Stream generator (only primitives — no ORM objects) ──────────────────
     def generate():
@@ -508,7 +551,7 @@ def stream_message(session_id):
 
     # Build LLM context and memory-enriched system prompt before generator
     llm_messages = _build_llm_messages(session_id, user_id, content, use_context)
-    sys_prompt   = _system_prompt_for(user_id)
+    sys_prompt   = _system_prompt_for(user_id, session_id)
 
     def generate():
         yield f'data: {json.dumps({"type":"session","session_id":session_id,"title":session_title,"user_message":user_msg_dict})}\n\n'

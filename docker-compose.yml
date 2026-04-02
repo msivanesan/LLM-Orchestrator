@@ -23,8 +23,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: llm_orchestrator_cache
-    ports:
-      - "6379:6379"
+    # Port NOT exposed — internal only, accessed via Docker network
     volumes:
       - redis_data:/data
     restart: always
@@ -51,8 +50,7 @@ services:
   chromadb:
     image: chromadb/chroma:latest
     container_name: llm_orchestrator_chromadb
-    ports:
-      - "8000:8000"
+    # Port NOT exposed — internal only, accessed by chat service via Docker network
     volumes:
       - chroma_data:/chroma/chroma
     environment:
@@ -140,8 +138,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: llm_ollama
-    ports:
-      - "11434:11434"
+    # Port NOT exposed — internal only, accessed by ai/chat services via Docker network
     volumes:
       - ollama_models:/root/.ollama       # persist downloaded models
     environment:
@@ -170,8 +167,7 @@ services:
   redis-exporter:
     image: oliver006/redis_exporter:latest
     container_name: llm_redis_exporter
-    ports:
-      - "9121:9121"
+    # Port NOT exposed — scraped internally by Prometheus via Docker network
     environment:
       - REDIS_ADDR=redis://redis:6379
     restart: always
@@ -194,8 +190,7 @@ services:
     build: ./user
     image: llm-user:latest
     container_name: llm_orchestrator_user
-    ports:
-      - "5001:5001"
+    # Port NOT exposed — routed via Nginx gateway (/api/users)
     environment:
       - USER_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-llm_orchestrator}
       - REDIS_URL=redis://redis:6379/0
@@ -214,8 +209,7 @@ services:
     build: ./apikey
     image: llm-apikey:latest
     container_name: llm_orchestrator_apikey
-    ports:
-      - "5002:5002"
+    # Port NOT exposed — used as Nginx auth_request sidecar (/api/apikeys)
     environment:
       - APIKEY_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-llm_orchestrator}
       - REDIS_URL=redis://redis:6379/0
@@ -251,8 +245,7 @@ services:
     build: ./ai
     image: llm-ai:latest
     container_name: llm_orchestrator_ai
-    ports:
-      - "5003:5003"
+    # Port NOT exposed — routed via Nginx gateway (/api/ai)
     environment:
       - AI_ENGINE_URL=http://ollama:11434/v1/chat/completions
       - AI_SERVICE_PORT=5003
@@ -267,8 +260,7 @@ services:
     build: ./chat
     image: llm-chat:latest
     container_name: llm_orchestrator_chat
-    ports:
-      - "5004:5004"
+    # Port NOT exposed — routed via Nginx gateway (/api/chat)
     environment:
       - CHAT_DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres123}@postgres:5432/${DB_NAME:-llm_orchestrator}
       - REDIS_URL=redis://redis:6379/0
@@ -281,6 +273,8 @@ services:
       - CHROMA_AUTH_TOKEN=${CHROMA_AUTH_TOKEN:-changeme-chroma-token}
       - APM_LOGGING_ENABLED=${APM_LOGGING_ENABLED:-True}
       - GUNICORN_WORKERS=${CHAT_WORKERS:-4}
+      - TRANSFORMERS_OFFLINE=1
+      - HF_HUB_OFFLINE=1
     depends_on:
       postgres:
         condition: service_healthy

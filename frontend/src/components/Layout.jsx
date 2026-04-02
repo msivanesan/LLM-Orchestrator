@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  ShieldCheck, LayoutDashboard, Users, UserPlus, LogOut, Key, MessageSquare
+  ShieldCheck, LayoutDashboard, Users, UserPlus, LogOut, Key, MessageSquare, BookOpen
 } from 'lucide-react';
 
 const Layout = ({ user, onLogout, children }) => (

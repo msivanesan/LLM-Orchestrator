@@ -11,6 +11,7 @@ class ChatSession(db.Model):
     title       = db.Column(db.String(255), default='New Chat')
     model       = db.Column(db.String(100), default='')
     is_archived = db.Column(db.Boolean, default=False)
+    summary     = db.Column(db.Text, default='') # Condensed conversation history
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -24,6 +25,7 @@ class ChatSession(db.Model):
             'title':       self.title,
             'model':       self.model,
             'is_archived': self.is_archived,
+            'summary':     self.summary or '',
             'created_at':  self.created_at.isoformat(),
             'updated_at':  self.updated_at.isoformat(),
         }

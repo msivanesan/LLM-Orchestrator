@@ -6,6 +6,7 @@ Key schema
 chat:session:{session_id}:messages   → JSON list of last N messages  (TTL 30 min)
 chat:user:{user_id}:sessions         → JSON list of session summaries (TTL 10 min)
 chat:lock:{session_id}               → Simple mutex while writing     (TTL 5 s)
+chat:ctx:{session_id}                → Rolling context window list    (TTL 30 min)
 """
 import json
 import logging
@@ -19,6 +20,11 @@ logger = logging.getLogger(__name__)
 TTL_MESSAGES = 1800   # 30 min
 TTL_SESSIONS = 600    # 10 min
 TTL_LOCK     = 5
+
+# Context window limits
+MAX_CTX_MSGS        = 20    # max number of messages kept in the rolling window
+MAX_CTX_TOKENS      = 3000  # soft token budget for the context sent to LLM
+AVERAGE_TOKENS_PER_CHAR = 0.25  # ~4 chars per token
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +90,7 @@ def invalidate_session_messages(session_id: int) -> None:
 # ---------------------------------------------------------------------------
 
 def push_message_to_context(session_id: int, role: str,
-                            content: str, max_window: int = 20) -> None:
+                            content: str, max_window: int = MAX_CTX_MSGS) -> None:
     """
     Maintain a rolling FIFO list of the last `max_window` messages
     in Redis for quick context assembly (no DB hit on every AI call).
@@ -108,6 +114,59 @@ def get_context_window(session_id: int) -> List[Dict]:
     except Exception:
         logger.warning("Redis: failed to get context for session %s", session_id)
         return []
+
+
+def is_context_warm(session_id: int) -> bool:
+    """Return True if the Redis context window has been populated."""
+    key = f"chat:ctx:{session_id}"
+    try:
+        return redis_client.llen(key) > 0
+    except Exception:
+        return False
+
+
+def warm_context_from_db(session_id: int, db_messages: List[Dict]) -> None:
+    """
+    Seed the Redis context window from database messages.
+    Called when the context window is cold (e.g. after server restart or TTL expiry).
+    Only loads the last MAX_CTX_MSGS messages to keep the window bounded.
+    """
+    key = f"chat:ctx:{session_id}"
+    try:
+        # Take only the most recent messages up to the max window size
+        recent = db_messages[-MAX_CTX_MSGS:] if len(db_messages) > MAX_CTX_MSGS else db_messages
+        pipe = redis_client.pipeline()
+        pipe.delete(key)
+        for msg in recent:
+            role    = msg.get('role', 'user')
+            content = msg.get('content', '')
+            pipe.rpush(key, json.dumps({"role": role, "content": content}))
+        pipe.expire(key, TTL_MESSAGES)
+        pipe.execute()
+        logger.info("Context warmed from DB for session %s (%d messages)", session_id, len(recent))
+    except Exception:
+        logger.warning("Redis: failed to warm context for session %s", session_id)
+
+
+def trim_messages_to_token_budget(messages: List[Dict],
+                                   budget: int = MAX_CTX_TOKENS) -> List[Dict]:
+    """
+    Trim a message list from the FRONT (oldest) until it fits within
+    the token budget. Always keeps at least the last message.
+    """
+    def estimate(msgs):
+        return int(sum(len(m.get('content', '')) * AVERAGE_TOKENS_PER_CHAR for m in msgs))
+
+    if estimate(messages) <= budget:
+        return messages
+
+    # Drop from front until we fit; always keep at least 1 message
+    trimmed = list(messages)
+    while len(trimmed) > 1 and estimate(trimmed) > budget:
+        trimmed.pop(0)
+
+    logger.debug("Context trimmed to %d messages to fit token budget %d", len(trimmed), budget)
+    return trimmed
 
 
 def invalidate_context(session_id: int) -> None:
