@@ -11,8 +11,8 @@ import api, { ENDPOINTS } from './lib/api';
 import Layout from './components/Layout';
 
 // Pages
+import HomePage from './pages/Home';
 import LoginPage from './pages/Login';
-import DashboardHome from './pages/Dashboard';
 import UserList from './pages/UserList';
 import CreateUser from './pages/UserCreate';
 import ManageProfile from './pages/ManageProfile';
@@ -26,6 +26,22 @@ import Docs from './pages/Docs';
 function App() {
   const [user, setUser] = useState(null);
   const [bootstrapping, setBootstrapping] = useState(true);
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
+
+  // 🌙 Toggle Theme
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
+  // Apply theme to document
+  useEffect(() => {
+    const root = document.documentElement;
+    root.className = theme;
+    document.body.className = theme;
+    root.style.transition = 'background-color 0.4s ease';
+  }, [theme]);
 
   const handleLogout = async () => {
     try {
@@ -76,52 +92,48 @@ function App() {
       <Routes>
         <Route 
           path="/login" 
-          element={user ? <Navigate to="/dashboard" /> : <LoginPage onLogin={setUser} />} 
+          element={user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} theme={theme} toggleTheme={toggleTheme} />} 
         />
         
         {/* Protected Routes */}
         <Route 
-          path="/dashboard" 
-          element={user ? <Layout user={user} onLogout={handleLogout}><DashboardHome user={user} /></Layout> : <Navigate to="/login" />} 
-        />
-        <Route 
           path="/users" 
-          element={user ? <Layout user={user} onLogout={handleLogout}><UserList /></Layout> : <Navigate to="/login" />} 
+          element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><UserList /></Layout> : <Navigate to="/login" />} 
         />
         <Route 
           path="/users/create" 
-          element={user ? <Layout user={user} onLogout={handleLogout}><CreateUser /></Layout> : <Navigate to="/login" />} 
+          element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><CreateUser /></Layout> : <Navigate to="/login" />} 
         />
         <Route 
           path="/settings" 
-          element={user ? <Layout user={user} onLogout={handleLogout}><ManageProfile /></Layout> : <Navigate to="/login" />} 
+          element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><ManageProfile /></Layout> : <Navigate to="/login" />} 
         />
         
         {/* Admin Only API Key Routes */}
         <Route 
           path="/keys" 
-          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout}><KeyList /></Layout> : <Navigate to="/" />} 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><KeyList /></Layout> : <Navigate to="/" />} 
         />
         <Route 
           path="/keys/create" 
-          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout}><KeyCreate /></Layout> : <Navigate to="/" />} 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><KeyCreate /></Layout> : <Navigate to="/" />} 
         />
         
         {/* Chat Route */}
         <Route
           path="/chat"
-          element={user ? <Chat user={user} /> : <Navigate to="/login" />}
+          element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><Chat user={user} /></Layout> : <Navigate to="/login" />}
         />
         <Route
           path="/docs"
-          element={<Docs />}
+          element={<Docs theme={theme} toggleTheme={toggleTheme} />}
         />
         
         {/* Public Password Recovery Routes */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-otp" element={<VerifyOTP />} />
         
-        <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
+        <Route path="/" element={user ? <Navigate to={user.role === 'admin' ? "/users" : "/chat"} /> : <HomePage theme={theme} toggleTheme={toggleTheme} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

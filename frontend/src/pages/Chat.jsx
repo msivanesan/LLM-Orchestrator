@@ -459,7 +459,7 @@ export default function Chat({ user }) {
       {/* ── Sidebar ── */}
       <aside className={`chat-sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
         <div className="chat-sidebar-header">
-          <div className="chat-brand"><Brain size={20} />{sidebarOpen && <span>AI Chat</span>}</div>
+          <div className="chat-brand"><Brain size={20} />{sidebarOpen && <span>Darkny chat</span>}</div>
           <button className="icon-btn-sm" onClick={() => setSidebarOpen(o => !o)}>
             <ChevronLeft size={18} style={{ transform: sidebarOpen ? '' : 'rotate(180deg)', transition: 'transform .25s' }} />
           </button>
@@ -518,8 +518,8 @@ export default function Chat({ user }) {
           <div className="chat-welcome">
             <div className="welcome-glow" />
             <div className="welcome-icon"><Bot size={48} /></div>
-            <h1>Your AI Assistant</h1>
-            <p>Powered by Llama 3 — Context-aware, private, and fast.</p>
+            <h1>Darkny Assistant</h1>
+            <p>Your private, high-performance LLM companion.</p>
             <div className="welcome-model-grid">
               {availableModels.map(m => (
                 <button key={m.id}

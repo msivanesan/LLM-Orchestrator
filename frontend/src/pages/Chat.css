@@ -10,9 +10,9 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  background: rgba(99,102,241,0.2);
+  background: var(--shadow);
   color: var(--primary);
-  border: 1px solid rgba(99,102,241,0.3);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 1px 7px;
   margin-left: 0.4rem;
@@ -29,8 +29,9 @@
 
 /* ── Streaming bubble glow ───────────────────────────────────── */
 .chat-bubble.streaming {
-  border-color: rgba(99,102,241,0.35) !important;
-  box-shadow: 0 0 0 2px rgba(99,102,241,0.08);
+  border-color: var(--primary) !important;
+  opacity: 0.8;
+  box-shadow: 0 0 0 2px var(--shadow);
 }
 
 /* ── Stop button ─────────────────────────────────────────────── */
@@ -99,7 +100,7 @@
 
 /* Code blocks */
 .code-block {
-  background: #0d1117;
+  background: var(--section-alt);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 10px;
   overflow: hidden;
@@ -385,7 +386,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
-  background: #1e2535;
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.3rem;
@@ -469,7 +470,7 @@
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 0.75rem;
-  background: linear-gradient(135deg, #fff 30%, var(--primary));
+  background: var(--gradient);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -663,7 +664,7 @@
 }
 
 .chat-msg-row.user .chat-avatar {
-  background: linear-gradient(135deg, var(--primary), #ec4899);
+  background: var(--gradient);
   color: white;
 }
 
@@ -684,7 +685,7 @@
 }
 
 .chat-bubble.user {
-  background: linear-gradient(135deg, var(--primary), #8b5cf6);
+  background: var(--gradient);
   color: white;
   border-bottom-right-radius: 4px;
 }
