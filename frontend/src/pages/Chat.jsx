@@ -254,7 +254,7 @@ export default function Chat({ user }) {
   const [input,         setInput]         = useState('');
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [sending,       setSending]       = useState(false);
-  const [model,         setModel]         = useState('llama3-7b');
+  const [model,         setModel]         = useState('');
   const [sidebarOpen,   setSidebarOpen]   = useState(true);
   const [error,         setError]         = useState('');
   const abortRef    = useRef(null);   // AbortController for stopping stream
@@ -310,7 +310,7 @@ export default function Chat({ user }) {
   const openSession = useCallback(async (session) => {
     if (session.id === null) { setActiveSession(DRAFT_SESSION); setMessages([]); return; }
     setActiveSession(session);
-    setModel(session.model || 'llama3-7b');
+    setModel(session.model || (availableModels.length > 0 ? availableModels[0].id : ''));
     setError('');
     try {
       const res = await chatApi.get(`/sessions/${session.id}/messages`);

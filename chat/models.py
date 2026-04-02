@@ -9,7 +9,7 @@ class ChatSession(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
     user_id     = db.Column(db.Integer, nullable=False, index=True)
     title       = db.Column(db.String(255), default='New Chat')
-    model       = db.Column(db.String(100), default='gpt-3.5-turbo')
+    model       = db.Column(db.String(100), default='')
     is_archived = db.Column(db.Boolean, default=False)
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

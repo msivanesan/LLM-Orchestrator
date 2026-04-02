@@ -1,9 +1,6 @@
-"""
-LLM Client — communicates with the internal AI Orchestration Service.
-Supports both regular and streaming (SSE) responses.
-"""
 import os
 import time
+import json
 import logging
 import urllib3
 from typing import List, Dict, Optional, Generator
@@ -14,9 +11,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
-AI_SERVICE_URL  = os.getenv('AI_SERVICE_URL',      'http://ai:5003')
-AI_TIMEOUT      = int(os.getenv('AI_SERVICE_TIMEOUT', '120'))
-DEFAULT_MODEL   = os.getenv('DEFAULT_CHAT_MODEL',  'tinyllama')
+# Direct Ollama connection — no dependency on the AI orchestrator
+OLLAMA_BASE = os.getenv('OLLAMA_BASE_URL', 'http://ollama:11434')
+OLLAMA_URL  = f"{OLLAMA_BASE}/v1/chat/completions"
+AI_TIMEOUT  = int(os.getenv('AI_SERVICE_TIMEOUT', '120'))
 
 SYSTEM_PROMPT = os.getenv(
     'CHAT_SYSTEM_PROMPT',
@@ -31,115 +29,126 @@ def _build_messages(messages: List[Dict], system_prompt: Optional[str] = None) -
     return messages
 
 
-# ── Internal Bridge ────────────────────────────────────────────────────────────
-
-def _get_ai_service_model_url(model: str) -> str:
-    """Routes requests to the central AI Orchestration Service."""
-    # Maps internal chat shorthand to AI service proxy routes
-    return f"{AI_SERVICE_URL}/api/ai/models/{model}/generate"
-
-
 # ── Blocking completion ────────────────────────────────────────────────────────
 
 def chat_completion(
     messages: List[Dict],
-    model: str = DEFAULT_MODEL,
+    model: str,
     temperature: float = 0.7,
     max_tokens: int = 1024,
     system_prompt: Optional[str] = None,
 ) -> Dict:
     full_messages = _build_messages(messages, system_prompt)
     payload = {
+        'model':       model,
         'messages':    full_messages,
         'temperature': temperature,
         'max_tokens':  max_tokens,
+        'stream':      False
     }
 
     start = time.time()
     try:
-        url = _get_ai_service_model_url(model)
-        resp = requests.post(url, json=payload, timeout=AI_TIMEOUT, verify=False)
+        resp = requests.post(OLLAMA_URL, json=payload, timeout=AI_TIMEOUT, verify=False)
         resp.raise_for_status()
     except Exception as e:
-        logger.error(f"AI Service Error: {e}")
-        raise RuntimeError(f'Cannot reach AI Service at {url}: {e}')
+        logger.error(f"Ollama Connection Error: {e}")
+        raise RuntimeError(f'Cannot reach Ollama at {OLLAMA_URL}: {e}')
 
     latency_ms = int((time.time() - start) * 1000)
     data = resp.json()
 
     try:
-        # Note: AI Service returns Gemini-style candidate structure
-        content = data['candidates'][0]['content']['parts'][0]['text']
-        finish_reason = data['candidates'][0].get('finish_reason', 'STOP')
+        # Standard OpenAI/Ollama structure
+        content = data['choices'][0]['message']['content']
+        finish_reason = data['choices'][0].get('finish_reason', 'stop')
     except (KeyError, IndexError):
-        raise RuntimeError(f'Unexpected AI Service response shape: {data}')
+        raise RuntimeError(f'Unexpected Ollama response shape: {data}')
 
     return {'content': content, 'model': model, 'latency_ms': latency_ms,
             'finish_reason': finish_reason}
 
 
-# ── Streaming completion (Legacy Bridge) ──────────────────────────────────────
+# ── Streaming completion ──────────────────────────────────────────────────────
 
 def chat_completion_stream(
     messages: List[Dict],
-    model: str = DEFAULT_MODEL,
+    model: str,
     temperature: float = 0.7,
     max_tokens: int = 1024,
     system_prompt: Optional[str] = None,
 ) -> Generator[str, None, None]:
     """
-    NOTE: Currently proxying streaming via the standard blocking call 
-    because the AI Service generates full candidates. 
-    Streaming is simulated for UI stability.
+    Real-time native streaming from Ollama.
     """
+    full_messages = _build_messages(messages, system_prompt)
+    payload = {
+        'model':       model,
+        'messages':    full_messages,
+        'temperature': temperature,
+        'max_tokens':  max_tokens,
+        'stream':      True
+    }
+
     try:
-        result = chat_completion(messages, model, temperature, max_tokens, system_prompt)
-        text = result['content']
-        # Yield as one big chunk for now (simulated stream)
-        yield f'data: {{"choices":[{{"delta":{{"content":"{text}"}}}}]}}\n\n'
+        with requests.post(OLLAMA_URL, json=payload, timeout=AI_TIMEOUT, verify=False, stream=True) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if line:
+                    decoded = line.decode('utf-8')
+                    # Directly pass through Ollama's data chunks
+                    yield f"{decoded}\n\n"
+
     except Exception as e:
-        yield f'data: {{"error":"{str(e)}"}}\n\n'
+        logger.error(f"Ollama Stream Error: {e}")
+        yield f'data: {json.dumps({"error": str(e)})}\n\n'
     finally:
         yield 'data: [DONE]\n\n'
 
 
 # ── Auto-title generation ─────────────────────────────────────────────────────
 
-def generate_title(first_user_message: str, model: str = DEFAULT_MODEL) -> str:
+def generate_title(first_user_message: str, model: str) -> str:
     """Generate a short session title from the first user message."""
     try:
         result = chat_completion(
             messages=[{'role': 'user', 'content': first_user_message}],
             model=model,
-            temperature=0.5,
+            temperature=0.7,
             max_tokens=20,
-            system_prompt=(
-                'Generate a short, descriptive 3-6 word title for this conversation. '
-                'Output ONLY the title, no punctuation, no quotes.'
-            ),
+            system_prompt='Generate a 3-6 word title for this chat. No quotes or intro. Just title.'
         )
         title = result['content'].strip().strip('"\'').strip()
         return title[:100] if title else 'New Chat'
     except Exception:
-        logger.warning('Title generation failed, using default')
         return first_user_message[:60] or 'New Chat'
 
 
 def ai_service_health() -> bool:
+    """Check if Ollama is responsive."""
     try:
-        resp = requests.get(
-            f'{AI_SERVICE_URL}/api/ai/status', timeout=5, verify=False
-        )
+        resp = requests.get(f'{OLLAMA_BASE}/api/tags', timeout=5)
         return resp.status_code == 200
     except Exception:
         return False
 
 
 def list_available_models() -> List[Dict]:
+    """Dynamically list models pulled into the Ollama engine."""
     try:
-        resp = requests.get(f'{AI_SERVICE_URL}/api/ai/models', timeout=10, verify=False)
+        resp = requests.get(f'{OLLAMA_BASE}/api/tags', timeout=10)
         resp.raise_for_status()
-        return resp.json().get('models', [])
+        ollama_models = resp.json().get('models', [])
+        
+        models_list = []
+        for m in ollama_models:
+            mid = m['name']
+            models_list.append({
+                "name": f"models/{mid}",
+                "displayName": f"Local: {mid}",
+                "id": mid
+            })
+        return models_list
     except Exception as e:
-        logger.warning('Could not fetch models: %s', e)
+        logger.warning('Could not fetch Ollama models: %s', e)
         return []

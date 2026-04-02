@@ -91,7 +91,8 @@ def build_system_prompt_with_memory(base_prompt: str, user_id: int) -> str:
 # ── Extract and save new facts ─────────────────────────────────────────────────
 
 def extract_and_save(user_id: int, session_id: int,
-                     user_message: str, assistant_reply: str) -> Dict[str, str]:
+                     user_message: str, assistant_reply: str,
+                     model_id: str) -> Dict[str, str]:
     """
     Call the LLM to extract facts from a message exchange and upsert them.
     Returns the dict of newly extracted facts (may be empty).
@@ -107,7 +108,7 @@ def extract_and_save(user_id: int, session_id: int,
     try:
         result = chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            model=os.getenv('DEFAULT_CHAT_MODEL', 'llama3-7b'),
+            model=model_id,
             temperature=0.1,      # very low — we want deterministic factual output
             max_tokens=256,
             system_prompt="You are a precise JSON extractor. Output only valid JSON.",

@@ -3,15 +3,19 @@ import requests
 import os
 import urllib3
 import time
+import logging
 
 # Suppress insecure request warnings for internal/private IP targets
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+logger = logging.getLogger(__name__)
 
 ai_bp = Blueprint('ai_bp', __name__)
 
 # --- CONFIGURATION ---
 DEFAULT_ENGINE = os.getenv('AI_ENGINE_URL', 'http://ollama:11434/v1/chat/completions')
 OLLAMA_BASE_URL = DEFAULT_ENGINE.replace('/v1/chat/completions', '')
+AI_TIMEOUT = int(os.getenv('AI_SERVICE_TIMEOUT', '120'))
 
 @ai_bp.route('/models/<model_id>/generate', methods=['POST'])
 @ai_bp.route('/models/<model_id>/completion', methods=['POST'])
@@ -30,7 +34,6 @@ def model_specific_completion(model_id):
             return jsonify({"error": "No 'prompt' or 'messages' provided"}), 400
         user_messages = [{"role": "user", "content": user_prompt}]
 
-    # 2. Build Payload
     payload = {
         "model": model_id,
         "messages": user_messages,
@@ -39,13 +42,13 @@ def model_specific_completion(model_id):
         "stream": False
     }
 
+    # Handle Blocking Path
     try:
         start_time = time.time()
-        response = requests.post(DEFAULT_ENGINE, json=payload, timeout=120, verify=False)
+        response = requests.post(DEFAULT_ENGINE, json=payload, timeout=AI_TIMEOUT, verify=False)
         response.raise_for_status()
         ai_data = response.json()
         
-        # 3. Model-Centric Response Structure
         content = ai_data.get('choices', [{}])[0].get('message', {}).get('content', '')
 
         return jsonify({
@@ -62,8 +65,18 @@ def model_specific_completion(model_id):
             }
         }), 200
 
+    except requests.exceptions.HTTPError as he:
+        status = he.response.status_code if he.response else 502
+        try:
+            err_body = he.response.json()
+            msg = err_body.get('error', str(he))
+        except:
+            msg = str(he)
+        return jsonify({"error": f"AI Engine error ({status}): {msg}", "type": "EngineError"}), status
+
     except Exception as e:
-        return jsonify({"error": f"Model '{model_id}' failed to respond: {str(e)}"}), 503
+        logger.exception("AI Service critical failure")
+        return jsonify({"error": f"Internal AI Service Error: {str(e)}", "type": "InternalError"}), 500
 
 @ai_bp.route('/completion', methods=['POST'])
 def legacy_completion():

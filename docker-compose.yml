@@ -276,6 +276,9 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - AI_SERVICE_URL=http://ai:5003
+      - CHROMA_HOST=${CHROMA_HOST:-chromadb}
+      - CHROMA_PORT=${CHROMA_PORT:-8000}
+      - CHROMA_AUTH_TOKEN=${CHROMA_AUTH_TOKEN:-changeme-chroma-token}
       - APM_LOGGING_ENABLED=${APM_LOGGING_ENABLED:-True}
       - GUNICORN_WORKERS=${CHAT_WORKERS:-4}
     depends_on:
@@ -284,6 +287,8 @@ services:
       redis:
         condition: service_started
       ai:
+        condition: service_started
+      chromadb:
         condition: service_started
     restart: always
 

@@ -142,7 +142,7 @@ def _post_send(session_id: int, user_id: int,
         def run_async_extraction():
             with app.app_context():
                 try:
-                    extract_and_save(user_id, session_id, user_content, ai_content)
+                    extract_and_save(user_id, session_id, user_content, ai_content, model)
                 except Exception:
                     logger.debug('Async memory extraction failed')
 
@@ -248,10 +248,13 @@ def list_sessions():
 def create_session():
     user_id = _uid()
     body    = request.get_json(silent=True) or {}
+    model   = (body.get('model') or '').strip()
+    if not model:
+        return _err("'model' is required")
     session = ChatSession(
         user_id=user_id,
         title=(body.get('title') or 'New Chat').strip()[:255],
-        model=(body.get('model') or 'llama3-7b').strip(),
+        model=model,
     )
     try:
         db.session.add(session)
@@ -366,10 +369,12 @@ def quick_stream():
     user_id = _uid()
     body    = request.get_json(silent=True) or {}
     content = (body.get('content') or '').strip()
-    model   = (body.get('model') or 'llama3-7b').strip()
+    model   = (body.get('model') or '').strip()
 
     if not content:
         return _err("'content' is required")
+    if not model:
+        return _err("'model' is required")
 
     try:
         # ── Create session ────────────────────────────────────────────────────
@@ -395,57 +400,67 @@ def quick_stream():
         yield f'data: {json.dumps({"type":"session","session_id":session_id,"title":"New Chat","user_message":user_msg_dict})}\n\n'
 
         full_content = []
-        for raw_line in chat_completion_stream(
-            messages=[{'role': 'user', 'content': content}],
-            model=model, temperature=0.7, max_tokens=1024,
-            system_prompt=sys_prompt,
-        ):
-            stripped = raw_line.strip()
-            if not stripped.startswith('data:'):
-                continue
-            data_str = stripped[5:].strip()
-            if data_str == '[DONE]':
-                break
-            try:
-                chunk = json.loads(data_str)
-                if 'error' in chunk:
-                    yield f'data: {json.dumps({"type":"error","message":chunk["error"]})}\n\n'
-                    break
-                    
-                text  = chunk['choices'][0]['delta'].get('content', '')
-                if text:
-                    full_content.append(text)
-                    yield f'data: {json.dumps({"type":"token","text":text})}\n\n'
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
+        client_disconnected = False
 
-        ai_text = ''.join(full_content) or '(no response)'
-
-        # Persist AI reply
         try:
-            ai_msg_dict = _save_message(session_id, 'assistant', ai_text)
-            ai_msg_id   = ai_msg_dict['id']
-        except Exception:
-            logger.exception('DB error saving AI reply')
-            yield f'data: {json.dumps({"type":"error","message":"Failed to save reply"})}\n\n'
-            return
+            for raw_line in chat_completion_stream(
+                messages=[{'role': 'user', 'content': content}],
+                model=model, temperature=0.7, max_tokens=1024,
+                system_prompt=sys_prompt,
+            ):
+                stripped = raw_line.strip()
+                if not stripped.startswith('data:'):
+                    continue
+                data_str = stripped[5:].strip()
+                if data_str == '[DONE]':
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    if 'error' in chunk:
+                        if not client_disconnected:
+                            yield f'data: {json.dumps({"type":"error","message":chunk["error"]})}\n\n'
+                        break
+                        
+                    text  = chunk['choices'][0]['delta'].get('content', '')
+                    if text:
+                        full_content.append(text)
+                        if not client_disconnected:
+                            try:
+                                yield f'data: {json.dumps({"type":"token","text":text})}\n\n'
+                            except (GeneratorExit, ConnectionResetError):
+                                client_disconnected = True
+                                logger.info(f"Client disconnected during quick-stream session {session_id}")
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+        finally:
+            ai_text = ''.join(full_content) or '(no response)'
 
-        # Bookkeeping + auto-title
-        new_title = _post_send(
-            session_id, user_id,
-            user_msg_id, content,
-            ai_msg_id,   ai_text,
-            is_first=True, model=model,
-        )
+            # Persist AI reply (even if client is gone)
+            try:
+                ai_msg_dict = _save_message(session_id, 'assistant', ai_text)
+                ai_msg_id   = ai_msg_dict['id']
+                
+                # Bookkeeping + auto-title
+                new_title = _post_send(
+                    session_id, user_id,
+                    user_msg_id, content,
+                    ai_msg_id,   ai_text,
+                    is_first=True, model=model,
+                )
 
-        final_title = new_title or 'New Chat'
-        done_payload = {
-            'type': 'done',
-            'session_id': session_id,
-            'title': final_title,
-            'assistant_message': dict(ai_msg_dict) if ai_msg_dict else {},
-        }
-        yield f'data: {json.dumps(done_payload)}\n\n'
+                if not client_disconnected:
+                    final_title = new_title or 'New Chat'
+                    done_payload = {
+                        'type': 'done',
+                        'session_id': session_id,
+                        'title': final_title,
+                        'assistant_message': dict(ai_msg_dict) if ai_msg_dict else {},
+                    }
+                    yield f'data: {json.dumps(done_payload)}\n\n'
+            except Exception:
+                logger.exception('Failed to finalize AI reply in background')
+                if not client_disconnected:
+                    yield f'data: {json.dumps({"type":"error","message":"Failed to save reply"})}\n\n'
 
     return Response(
         stream_with_context(generate()),
@@ -468,14 +483,18 @@ def stream_message(session_id):
 
     body        = request.get_json(silent=True) or {}
     content     = (body.get('content') or '').strip()
-    model       = (body.get('model') or session.model or 'llama3-7b').strip()
+    # Use explicit model, then session-stored model, then fail
+    model       = (body.get('model') or session.model or '').strip()
+    
+    if not content:
+        return _err("'content' is required")
+    if not model:
+        return _err("'model' is required")
+
     temperature = float(body.get('temperature', 0.7))
     max_tokens  = int(body.get('max_tokens', 1024))
     use_context = bool(body.get('use_context', True))
     session_title = session.title   # snapshot — don't touch ORM later
-
-    if not content:
-        return _err("'content' is required")
 
     is_first = ChatMessage.query.filter_by(session_id=session_id).count() == 0
 
@@ -495,58 +514,68 @@ def stream_message(session_id):
         yield f'data: {json.dumps({"type":"session","session_id":session_id,"title":session_title,"user_message":user_msg_dict})}\n\n'
 
         full_content = []
-        for raw_line in chat_completion_stream(
-            messages=llm_messages, model=model,
-            temperature=temperature, max_tokens=max_tokens,
-            system_prompt=sys_prompt,
-        ):
-            stripped = raw_line.strip()
-            if not stripped.startswith('data:'):
-                continue
-            data_str = stripped[5:].strip()
-            if data_str == '[DONE]':
-                break
-            try:
-                chunk = json.loads(data_str)
-                if 'error' in chunk:
-                    yield f'data: {json.dumps({"type":"error","message":chunk["error"]})}\n\n'
-                    break
+        client_disconnected = False
 
-                text  = chunk['choices'][0]['delta'].get('content', '')
-                if text:
-                    full_content.append(text)
-                    yield f'data: {json.dumps({"type":"token","text":text})}\n\n'
-            except (json.JSONDecodeError, KeyError, IndexError):
-                continue
-
-        ai_text = ''.join(full_content) or '(no response)'
-
-        # Persist AI reply
         try:
-            ai_msg_dict = _save_message(session_id, 'assistant', ai_text)
-            ai_msg_id   = ai_msg_dict['id']
-        except Exception:
-            logger.exception('DB error saving AI reply')
-            yield f'data: {json.dumps({"type":"error","message":"Failed to save reply"})}\n\n'
-            return
+            for raw_line in chat_completion_stream(
+                messages=llm_messages, model=model,
+                temperature=temperature, max_tokens=max_tokens,
+                system_prompt=sys_prompt,
+            ):
+                stripped = raw_line.strip()
+                if not stripped.startswith('data:'):
+                    continue
+                data_str = stripped[5:].strip()
+                if data_str == '[DONE]':
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    if 'error' in chunk:
+                        if not client_disconnected:
+                            yield f'data: {json.dumps({"type":"error","message":chunk["error"]})}\n\n'
+                        break
 
-        # Bookkeeping + auto-title
-        new_title = _post_send(
-            session_id, user_id,
-            user_msg_id, content,
-            ai_msg_id,   ai_text,
-            is_first=is_first, model=model,
-        )
+                    text  = chunk['choices'][0]['delta'].get('content', '')
+                    if text:
+                        full_content.append(text)
+                        if not client_disconnected:
+                            try:
+                                yield f'data: {json.dumps({"type":"token","text":text})}\n\n'
+                            except (GeneratorExit, ConnectionResetError):
+                                client_disconnected = True
+                                logger.info(f"Client disconnected during stream session {session_id}")
+                except (json.JSONDecodeError, KeyError, IndexError):
+                    continue
+        finally:
+            ai_text = ''.join(full_content) or '(no response)'
 
-        final_title = new_title or session_title
-        done_payload = {
-            'type': 'done',
-            'session_id': session_id,
-            'title': final_title,
-            'user_message': dict(user_msg_dict) if user_msg_dict else {},
-            'assistant_message': dict(ai_msg_dict) if ai_msg_dict else {},
-        }
-        yield f'data: {json.dumps(done_payload)}\n\n'
+            # Persist AI reply (even if client is gone)
+            try:
+                ai_msg_dict = _save_message(session_id, 'assistant', ai_text)
+                ai_msg_id   = ai_msg_dict['id']
+
+                # Bookkeeping + auto-title
+                new_title = _post_send(
+                    session_id, user_id,
+                    user_msg_id, content,
+                    ai_msg_id,   ai_text,
+                    is_first=is_first, model=model,
+                )
+
+                if not client_disconnected:
+                    final_title = new_title or session_title
+                    done_payload = {
+                        'type': 'done',
+                        'session_id': session_id,
+                        'title': final_title,
+                        'user_message': dict(user_msg_dict) if user_msg_dict else {},
+                        'assistant_message': dict(ai_msg_dict) if ai_msg_dict else {},
+                    }
+                    yield f'data: {json.dumps(done_payload)}\n\n'
+            except Exception:
+                logger.exception('Failed to finalize AI reply in background')
+                if not client_disconnected:
+                    yield f'data: {json.dumps({"type":"error","message":"Failed to save reply"})}\n\n'
 
     return Response(
         stream_with_context(generate()),
