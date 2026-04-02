@@ -133,8 +133,20 @@ def ai_service_health() -> bool:
         return False
 
 
+# Global in-memory cache for models (12 hours)
+_MODEL_CACHE = {"data": None, "updated_at": 0}
+CACHE_TTL = 43200
+
 def list_available_models() -> List[Dict]:
-    """Dynamically list models pulled into the Ollama engine."""
+    """Dynamically list chat-capable models (filters out embedding-only models)."""
+    global _MODEL_CACHE
+    now = time.time()
+
+    # 1. Check if cache is still valid
+    if _MODEL_CACHE["data"] and (now - _MODEL_CACHE["updated_at"]) < CACHE_TTL:
+        return _MODEL_CACHE["data"]
+
+    # 2. Fetch fresh list from Ollama
     try:
         resp = requests.get(f'{OLLAMA_BASE}/api/tags', timeout=10)
         resp.raise_for_status()
@@ -143,12 +155,23 @@ def list_available_models() -> List[Dict]:
         models_list = []
         for m in ollama_models:
             mid = m['name']
+            
+            # ── Intelligent Filter ──
+            # Skip models that are obviously for embeddings only to avoid UI clutter
+            if any(k in mid.lower() for k in ['embed', 'minilm', 'arctic', 'sentence']):
+                logger.info("Skipping embedding model for chat UI: %s", mid)
+                continue
+
             models_list.append({
                 "name": f"models/{mid}",
                 "displayName": f"Local: {mid}",
                 "id": mid
             })
+        
+        # 3. Update Cache
+        _MODEL_CACHE = {"data": models_list, "updated_at": now}
         return models_list
+
     except Exception as e:
-        logger.warning('Could not fetch Ollama models: %s', e)
+        if _MODEL_CACHE["data"]: return _MODEL_CACHE["data"]
         return []

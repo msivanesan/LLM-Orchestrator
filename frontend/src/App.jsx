@@ -21,6 +21,7 @@ import VerifyOTP from './pages/VerifyOTP';
 import KeyList from './pages/KeyList';
 import KeyCreate from './pages/KeyCreate';
 import Chat from './pages/Chat';
+import Docs from './pages/Docs';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -111,7 +112,11 @@ function App() {
           path="/chat"
           element={user ? <Chat user={user} /> : <Navigate to="/login" />}
         />
-
+        <Route
+          path="/docs"
+          element={<Docs />}
+        />
+        
         {/* Public Password Recovery Routes */}
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/verify-otp" element={<VerifyOTP />} />

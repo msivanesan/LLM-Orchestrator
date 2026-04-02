@@ -1,30 +1,36 @@
-# 🤖 AI Orchestration Service
+# AI Gateway Service (Internal README)
 
-The AI Orchestration Service is a Gemini-compatible middleware that manages interactions with external inference engines (like Ollama or vLLM). It provides a unified API for model discovery and generation while integrating with the ecosystem's security and rate-limiting layers.
+The AI Service acts as a high-performance, strictly blocking proxy between external agents and the private LLM engine (Ollama). It provides standardized endpoints for generative AI and semantic embeddings while enforcing strict task-to-model role separation.
 
-## 🚀 Key Features
--   **Model-Specific Endpoints**: Support for `/api/ai/models/<id>/generate` and generic `/api/ai/v1/chat/completions`.
--   **Ollama Integration**: Configured to proxy requests to an external GPU-powered Ollama instance.
--   **Auth Request Compatibility**: Designed to work with Nginx `auth_request` for API key validation.
+## Architecture
+- **Tech Stack**: Flask, Requests, Gunicorn.
+- **Upstream**: Connects to `llm_ollama:11434` (Internal OpenAI-compatible API).
+- **Ingress**: Exposed via the Nginx Gateway (`llm_orchestrator_gateway`) for authentication and rate limiting.
 
-## 🛠️ Configuration
-Required in `.env`:
--   `AI_ENGINE_URL`: The URL of the downstream inference engine (Ollama/vLLM).
--   `AI_SERVICE_PORT`: Defaults to 5003.
+## Key Features
+1. **Model Discovery & Caching**: Models are discovered dynamically from Ollama. The list is cached for **12 hours** to reduce overhead.
+2. **Role Enforcement**:
+    - **Generative Task**: Rejects embedding-only models (e.g., `nomic-embed-text`).
+    - **Embedding Task**: Rejects chat/generative-only models (e.g., `llama3`).
+3. **Metadata Enrichment**: Automatically extracts token usage (`usage`) and latency stats for agent tracking.
 
-## 🏃 Operation
-### Start the Service (Standalone)
-```powershell
-cd ai
-python .\manage.py runserver
+## Environment Variables
+| Variable | Default | Purpose |
+| :------- | :------ | :------ |
+| `AI_ENGINE_URL` | `http://ollama:11434/v1/chat/completions` | Address of the LLM engine. |
+| `AI_SERVICE_TIMEOUT` | `120` | Request timeout in seconds. |
+
+---
+
+## Maintenance Tasks
+### Clearing Cache
+To force-refresh the model list before the 12-hour TTL expires, restart the `ai` service:
+```bash
+docker compose restart ai
 ```
 
-### Production Mode
-```powershell
-python .\manage.py runprod
+### Pulling a new Embedding model
+For RAG workloads, pull a dedicated embedding model into the engine:
+```bash
+docker exec -it llm_ollama ollama pull nomic-embed-text
 ```
-
-## 📡 API Endpoints
--   `GET /api/ai/models`: List available models.
--   `POST /api/ai/models/<model_id>/generate`: Generate a completion using a specific model.
--   `POST /api/ai/v1/chat/completions`: OpenAI-compatible chat completion endpoint.

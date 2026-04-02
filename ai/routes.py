@@ -17,13 +17,27 @@ DEFAULT_ENGINE = os.getenv('AI_ENGINE_URL', 'http://ollama:11434/v1/chat/complet
 OLLAMA_BASE_URL = DEFAULT_ENGINE.replace('/v1/chat/completions', '')
 AI_TIMEOUT = int(os.getenv('AI_SERVICE_TIMEOUT', '120'))
 
+# --- HELPERS ---
+def is_embedding_model(model_name: str) -> bool:
+    """Helper to detect if a model is intended for embeddings only."""
+    keywords = ['embed', 'minilm', 'arctic', 'sentence', 'bert', 'nomic']
+    return any(k in model_name.lower() for k in keywords)
+
+
 @ai_bp.route('/models/<model_id>/generate', methods=['POST'])
 @ai_bp.route('/models/<model_id>/completion', methods=['POST'])
 def model_specific_completion(model_id):
     """
-    Model-specific endpoint (Gemini Style)
-    Usage: /api/ai/models/llama3-7b/generate
+    Model-specific completion endpoint (Generative task).
+    REJECTS embedding models to prevent improper usage.
     """
+    # ── Strict Role Enforcement Check ──
+    if is_embedding_model(model_id):
+        return jsonify({
+            "error": f"Model '{model_id}' is a dedicated embedding model and cannot be used for text generation.",
+            "type": "ModelRoleMismatch"
+        }), 400
+
     data = request.get_json() or {}
     user_prompt = data.get('prompt')
     user_messages = data.get('messages', [])
@@ -34,11 +48,15 @@ def model_specific_completion(model_id):
             return jsonify({"error": "No 'prompt' or 'messages' provided"}), 400
         user_messages = [{"role": "user", "content": user_prompt}]
 
+    # 2. Advanced Parameters for Agents
     payload = {
         "model": model_id,
         "messages": user_messages,
         "temperature": data.get('temperature', 0.7),
         "max_tokens": data.get('max_tokens', 1024),
+        "top_p": data.get('top_p', 1.0),
+        "presence_penalty": data.get('presence_penalty', 0.0),
+        "frequency_penalty": data.get('frequency_penalty', 0.0),
         "stream": False
     }
 
@@ -49,7 +67,9 @@ def model_specific_completion(model_id):
         response.raise_for_status()
         ai_data = response.json()
         
+        # 3. Extract Content and Usage Metadata
         content = ai_data.get('choices', [{}])[0].get('message', {}).get('content', '')
+        usage = ai_data.get('usage', {}) # Standard OpenAI/Ollama usage object
 
         return jsonify({
             "model": model_id,
@@ -61,7 +81,8 @@ def model_specific_completion(model_id):
             ],
             "metadata": {
                 "engine": "distributed-gpu",
-                "latency_ms": int((time.time() - start_time) * 1000)
+                "latency_ms": int((time.time() - start_time) * 1000),
+                "usage": usage
             }
         }), 200
 
@@ -78,18 +99,74 @@ def model_specific_completion(model_id):
         logger.exception("AI Service critical failure")
         return jsonify({"error": f"Internal AI Service Error: {str(e)}", "type": "InternalError"}), 500
 
+
+@ai_bp.route('/models/<model_id>/embed', methods=['POST'])
+def embed_content(model_id):
+    """
+    Model-specific embedding endpoint (Semantic Search task).
+    REJECTS chat/generative models to prevent improper usage.
+    """
+    # ── Strict Role Enforcement Check ──
+    if not is_embedding_model(model_id):
+        return jsonify({
+            "error": f"Model '{model_id}' is a generative model. Please use a dedicated embedding model (like 'nomic-embed-text') for search and RAG tasks.",
+            "type": "ModelRoleMismatch"
+        }), 400
+
+    data = request.get_json() or {}
+    text_content = data.get('content') or data.get('input')
+    
+    if not text_content:
+        return jsonify({"error": "No 'content' or 'input' provided for embedding"}), 400
+
+    embed_payload = {
+        "model": model_id,
+        "input": text_content
+    }
+
+    try:
+        # Route to Ollama's embeddings endpoint
+        embed_url = DEFAULT_ENGINE.replace('/chat/completions', '/embeddings')
+        resp = requests.post(embed_url, json=embed_payload, timeout=AI_TIMEOUT, verify=False)
+        resp.raise_for_status()
+        embed_data = resp.json()
+
+        return jsonify({
+            "model": model_id,
+            "embedding": embed_data.get('data', [{}])[0].get('embedding', []),
+            "metadata": {
+                "engine": "distributed-gpu-embed",
+                "usage": embed_data.get('usage', {})
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Embedding failed: {e}")
+        return jsonify({"error": f"Embedding engine failure: {str(e)}"}), 502
+
 @ai_bp.route('/completion', methods=['POST'])
 def legacy_completion():
     """Fallback / compatibility endpoint"""
     return model_specific_completion("tinyllama")
 
+# Global in-memory cache (12 hours = 43200 seconds)
+_MODEL_CACHE = {"data": None, "updated_at": 0}
+CACHE_TTL = 43200
+
 @ai_bp.route('/models', methods=['GET'])
 def list_models():
-    """List dynamically available models pulled into Ollama."""
+    """List dynamically available models pulled into Ollama (cached for 12 hours)."""
+    global _MODEL_CACHE
+    now = time.time()
+
+    # 1. Check if cache is still valid
+    if _MODEL_CACHE["data"] and (now - _MODEL_CACHE["updated_at"]) < CACHE_TTL:
+        return jsonify(_MODEL_CACHE["data"]), 200
+
+    # 2. Fetch fresh list from Ollama
     models_list = []
-    
     try:
-        # Use Ollama's native tag API to see what is actually downloaded
+        # Use Ollama's native tag API directly for discovery
         tags_url = OLLAMA_BASE_URL.replace('/v1', '') + '/api/tags'
         resp = requests.get(tags_url, timeout=5)
         if resp.status_code == 200:
@@ -101,10 +178,22 @@ def list_models():
                     "displayName": f"Local: {mid}",
                     "capabilities": ["generateContent"]
                 })
-    except Exception as e:
-        return jsonify({"error": f"Ollama connection failed: {str(e)}"}), 503
+        else:
+             # Fallback if Ollama returns error (still serve cache if we have it)
+             if _MODEL_CACHE["data"]: return jsonify(_MODEL_CACHE["data"]), 200
+             return jsonify({"error": "Ollama service unavailable"}), 503
 
-    return jsonify({ "models": models_list }), 200
+        # 3. Update Cache
+        final_resp = { "models": models_list }
+        _MODEL_CACHE = {"data": final_resp, "updated_at": now}
+        return jsonify(final_resp), 200
+
+    except Exception as e:
+        # On error, serve from stale cache if available
+        if _MODEL_CACHE["data"]:
+            logger.warning("Serving stale model list due to Ollama error: %s", e)
+            return jsonify(_MODEL_CACHE["data"]), 200
+        return jsonify({"error": f"Discovery failed: {str(e)}"}), 503
 
 @ai_bp.route('/status', methods=['GET'])
 def ai_status():
