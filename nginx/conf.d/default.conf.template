@@ -7,9 +7,6 @@ server {
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-KEY' always;
     add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
 
-    # 🔐 Global Internal Service Security
-    proxy_set_header X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
-
     # Handle OPTIONS
     if ($request_method = 'OPTIONS') {
         return 204;
@@ -20,17 +17,20 @@ server {
 
     # 1. Identity Manager (User Service)
     location /api/users/ {
+        proxy_set_header X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
         proxy_pass http://user:5001/api/users/;
     }
 
     # 2. Integration Manager (ApiKey Service)
     location /api/apikeys/ {
+        proxy_set_header X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
         proxy_pass http://apikey:5002/api/apikeys/;
     }
 
     # 3. AI ORCHESTRATION LAYER (Secure Access Only)
     location /api/ai/ {
         auth_request /internal/validate;
+        proxy_set_header X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
         proxy_pass http://ai:5003/api/ai/;
         
         proxy_read_timeout 300s;
@@ -39,17 +39,18 @@ server {
     }
 
     # 4. Chat Hub (SSE Streaming Support)
-    # Special configuration needed for Server-Sent Events
     location /api/chat/ {
-        proxy_pass            http://chat:5004/api/chat/;
-        proxy_read_timeout    300s;
-        proxy_connect_timeout 10s;
-        proxy_send_timeout    300s;
+        proxy_set_header      X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
         proxy_set_header      Host $host;
         proxy_set_header      X-Real-IP $remote_addr;
         proxy_set_header      X-Forwarded-For $proxy_add_x_forwarded_for;
 
-        # Required for real-time streaming - DISABLIE BUFFERING
+        proxy_pass            http://chat:5004/api/chat/;
+        proxy_read_timeout    300s;
+        proxy_connect_timeout 10s;
+        proxy_send_timeout    300s;
+
+        # Required for real-time streaming - DISABLE BUFFERING
         proxy_buffering       off;
         proxy_cache           off;
         proxy_http_version    1.1;
@@ -59,13 +60,14 @@ server {
     # 5. Security Sidecar (INTERNAL ONLY)
     location = /internal/validate {
         internal;
+        proxy_set_header X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
         proxy_pass http://apikey:5002/api/apikeys/validate_header;
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header X-Original-URI $request_uri;
     }
 
-    # 🗃️ UNIFIED ERROR CENTER (Capped at 429, 500, 502, 469)
+    # 🗃️ UNIFIED ERROR CENTER
     error_page 429 = @rate_limit;
     location @rate_limit { add_header Content-Type application/json; return 429 '{"status": 429, "error": "Too Many Requests", "message": "Slow down! You have reached your quota limit."}'; }
 
