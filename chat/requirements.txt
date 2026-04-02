@@ -10,3 +10,4 @@ psycopg2-binary
 chromadb-client
 sentence-transformers
 prometheus-client
+huey

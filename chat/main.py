@@ -17,7 +17,7 @@ def create_app() -> Flask:
     app.config.update(
         # Database
         SQLALCHEMY_DATABASE_URI=os.getenv(
-            'CHAT_DATABASE_URL', 'sqlite:///chat.db'
+            'DATABASE_URL', os.getenv('CHAT_DATABASE_URL', 'sqlite:///chat.db')
         ),
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
         SQLALCHEMY_ENGINE_OPTIONS=(

@@ -1,0 +1,39 @@
+services:
+  # ══════════════════════════════════════════════════════════════════
+  # LLM RUNTIME (vLLM)
+  # ══════════════════════════════════════════════════════════════════
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: llm_orchestrator_vllm
+    # ── Command to start the vLLM engine ──
+    # Change the --model to your preferred one from HuggingFace
+    command: >
+      --model Qwen/Qwen2-7B-Instruct 
+      --max-model-len 4096 
+      --gpu-memory-utilization 0.9 
+      --tensor-parallel-size 1
+    ports:
+      - "8000:8000"
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+    environment:
+      # Optional: Add HF_TOKEN if using gated models like Llama 3
+      - HF_TOKEN=${HF_TOKEN:-}
+    # ── NVIDIA GPU Reservation ──
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: always
+    networks:
+      - llm_net
+
+volumes:
+  vllm_cache:          # persists HuggingFace weights across restarts
+
+networks:
+  llm_net:
+    driver: bridge

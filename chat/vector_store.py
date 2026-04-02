@@ -30,9 +30,12 @@ _chroma_client: Optional[chromadb.HttpClient] = None
 def _get_embed_model() -> SentenceTransformer:
     global _embed_model
     if _embed_model is None:
-        logger.info("Loading embedding model: %s", EMBED_MODEL_NAME)
+        logger.info("Loading embedding model into RAM: %s", EMBED_MODEL_NAME)
         _embed_model = SentenceTransformer(EMBED_MODEL_NAME)
     return _embed_model
+
+# ── Pre-load model into RAM on startup (avoids first-request delay) ──
+_get_embed_model()
 
 
 def _get_chroma_client() -> chromadb.HttpClient:

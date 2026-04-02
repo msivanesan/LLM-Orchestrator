@@ -29,14 +29,33 @@ from cache import (
     push_message_to_context, get_context_window, invalidate_context, redis_ping,
     is_context_warm, warm_context_from_db, trim_messages_to_token_budget, MAX_CTX_MSGS,
 )
+from tasks import bg_process_chat_message
 from vector_store import upsert_message, query_context, delete_session_vectors, chroma_health
 from llm_client import (
     chat_completion, chat_completion_stream, generate_title,
     ai_service_health, list_available_models,
 )
 
+from functools import wraps
+import os
+
 logger  = logging.getLogger(__name__)
 chat_bp = Blueprint('chat', __name__)
+
+# 🔐 Zero-Trust: Mandatory Gateway Check
+INTERNAL_SECRET = os.getenv('INTERNAL_SERVICE_SECRET', 'super-secret-service-key-123')
+
+def internal_only(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 1. Verify this request came from our Nginx Gateway
+        sent_key = request.headers.get('X-Internal-Service-Key')
+        if not sent_key or sent_key != INTERNAL_SECRET:
+            logger.warning("BLOCKING: Attempted direct internal access to %s", request.path)
+            return jsonify({"status": "error", "message": "Access Denied: Gateway Only"}), 403
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -158,40 +177,20 @@ def _post_send(session_id: int, user_id: int,
                ai_msg_id: int, ai_content: str,
                is_first: bool, model: str) -> str:
     """
-    Redis + VectorDB bookkeeping + optional auto-title.
-    All arguments are primitives — safe to call inside a generator.
+    Redis context update + background task dispatch.
     Returns the (possibly updated) session title string.
     """
+    # ── 1. Immediate Redis context update (must be fast, same process) ──
     push_message_to_context(session_id, 'user',      user_content, MAX_CTX_MSGS)
     push_message_to_context(session_id, 'assistant', ai_content,   MAX_CTX_MSGS)
     invalidate_session_messages(session_id)
     invalidate_user_sessions(user_id)
-    _index_safe(user_id, user_msg_id, user_content, session_id, 'user')
-    _index_safe(user_id, ai_msg_id,   ai_content,   session_id, 'assistant')
 
-    # ── Memory extraction (best-effort, non-blocking background thread) ──
-    try:
-        from threading import Thread
-        from flask import current_app
-        app = current_app._get_current_object()
-        
-        def run_async_bg():
-            with app.app_context():
-                try:
-                    # 1. Fact Extraction
-                    from memory import extract_and_save, summarize_session
-                    extract_and_save(user_id, session_id, user_content, ai_content, model)
-                    
-                    # 2. Periodic Summarization (every 10 msgs)
-                    msg_count = ChatMessage.query.filter_by(session_id=session_id).count()
-                    if msg_count > 0 and msg_count % 10 == 0:
-                        summarize_session(session_id, model)
-                except Exception:
-                    logger.debug('Async background worker (memory/summary) failed')
-
-        Thread(target=run_async_bg).start()
-    except Exception:
-        logger.debug('Failed to start memory extraction thread')
+    # ── 2. Dispatch heavy-lifting (Vector DB, Memory, Summary) to Huey worker ──
+    bg_process_chat_message(
+        user_id, session_id, user_msg_id, user_content, 
+        ai_msg_id, ai_content, model
+    )
 
     new_title = None
     if is_first:
@@ -268,7 +267,8 @@ def get_models():
 
 # ── Sessions CRUD ──────────────────────────────────────────────────────────────
 
-@chat_bp.get('/sessions')
+@chat_bp.route('/sessions', methods=['GET'])
+@internal_only
 @jwt_required()
 def list_sessions():
     user_id  = _uid()
@@ -355,7 +355,8 @@ def delete_session(session_id):
 
 # ── Messages ───────────────────────────────────────────────────────────────────
 
-@chat_bp.get('/sessions/<int:session_id>/messages')
+@chat_bp.route('/sessions/<int:session_id>/messages', methods=['GET'])
+@internal_only
 @jwt_required()
 def list_messages(session_id):
     user_id = _uid()
@@ -514,9 +515,10 @@ def quick_stream():
 
 # ── STREAM — existing session ──────────────────────────────────────────────────
 
-@chat_bp.post('/sessions/<int:session_id>/stream')
+@chat_bp.route('/sessions/<int:session_id>/stream', methods=['POST'])
+@internal_only
 @jwt_required()
-def stream_message(session_id):
+def stream_chat(session_id):
     """
     Stream AI response for an existing session.
     SSE: session → token* → done

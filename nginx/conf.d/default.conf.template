@@ -7,6 +7,9 @@ server {
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-KEY' always;
     add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
 
+    # 🔐 Global Internal Service Security
+    proxy_set_header X-Internal-Service-Key "${INTERNAL_SERVICE_SECRET}";
+
     # Handle OPTIONS
     if ($request_method = 'OPTIONS') {
         return 204;

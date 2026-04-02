@@ -1,18 +1,21 @@
-  # ── Ollama (local LLM runtime — swap to vLLM by changing image/config) ──────
+services:
+  # ══════════════════════════════════════════════════════════════════
+  # LLM RUNTIME (Ollama)
+  # ══════════════════════════════════════════════════════════════════
   ollama:
     image: ollama/ollama:latest
     container_name: llm_ollama
-    ports:
-      - "11434:11434"
+    # Port NOT exposed — internal only, accessed by ai/chat services via Docker network
     volumes:
-      - ollama_models:/root/.ollama     # persist downloaded models
+      - ollama_models:/root/.ollama       # persist downloaded models
     environment:
-      - OLLAMA_HOST=0.0.0.0             # listen on all interfaces
-      - OLLAMA_ORIGINS=*                # allow all CORS origins
-      - OLLAMA_NUM_PARALLEL=2           # concurrent generation slots
-      - OLLAMA_MAX_LOADED_MODELS=1      # keep 1 model in GPU/RAM
+      - OLLAMA_HOST=0.0.0.0               # listen on all interfaces
+      - OLLAMA_ORIGINS=*                  # allow CORS from gateway
+      - OLLAMA_NUM_PARALLEL=2             # concurrent generation slots
+      - OLLAMA_MAX_LOADED_MODELS=1        # keep 1 model in RAM
+      - OLLAMA_KEEP_ALIVE=5m              # unload after 5 min idle
     restart: always
-    # GPU support — uncomment if you have NVIDIA GPU + nvidia-container-toolkit
+    # ── GPU support: uncomment if nvidia-container-toolkit is installed ────
     # deploy:
     #   resources:
     #     reservations:
@@ -21,8 +24,18 @@
     #           count: 1
     #           capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      # Use the native ollama binary to check health
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 60s   # give time for model pull on first boot
+      start_period: 60s
+    networks:
+      - llm_net
+
+volumes:
+  ollama_models:          # persists Llama/Qwen/Phi weights across restarts
+
+networks:
+  llm_net:
+    driver: bridge
