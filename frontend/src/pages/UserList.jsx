@@ -1,16 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { UserPlus, Loader2, ToggleRight, ToggleLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { 
+  UserPlus, Loader2, ToggleRight, ToggleLeft, Search, 
+  MoreHorizontal, Mail, Shield, ShieldCheck, 
+  Activity, Users as UsersIcon, Trash2, Pencil,
+  ChevronLeft, ChevronRight
+} from 'lucide-react';
 import api from '../lib/api';
 
 const UserList = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeMenu, setActiveMenu] = useState(null);
+  const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+  
+  const menuRef = useRef(null);
+  const navigate = useNavigate();
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (page = 1) => {
+    setLoading(true);
     try {
-      const res = await api.get('/');
+      const res = await api.get(`/?page=${page}&per_page=10`);
       setUsers(res.data.items || []);
+      setPagination({
+        page: res.data.page,
+        pages: res.data.pages,
+        total: res.data.total
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -18,54 +35,199 @@ const UserList = () => {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => { 
+    fetchUsers(1);
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setActiveMenu(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
-  const toggleUser = async (id) => {
+  const toggleUser = async (u) => {
     try {
-      await api.patch(`/${id}/toggle`);
-      fetchUsers();
+      await api.patch(`/${u.id}/toggle`);
+      fetchUsers(pagination.page);
     } catch (err) {
       alert(err.response?.data?.message || "Action failed");
     }
   };
 
-  if (loading) return <div className="loader"><Loader2 className="animate-spin" /> Fetching Users...</div>;
+  const deleteUser = async (id) => {
+    if (!window.confirm("Confirm identity revocation.")) return;
+    try {
+      await api.delete(`/${id}`);
+      fetchUsers(pagination.page);
+      setActiveMenu(null);
+    } catch (err) {
+      alert(err.response?.data?.message || "Deletion failed");
+    }
+  };
+
+  const filteredUsers = users.filter(u => 
+    (u.username || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (u.email || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const stats = [
+    { label: 'Identities', value: pagination.total, icon: <UsersIcon size={14} />, color: 'var(--primary)' },
+    { label: 'Admins', value: users.filter(u => u.role === 'admin').length, icon: <ShieldCheck size={14} />, color: '#6366f1' },
+    { label: 'Active', value: users.filter(u => u.is_active).length, icon: <Activity size={14} />, color: '#10b981' }
+  ];
+
+  if (loading && users.length === 0) return (
+    <div className="loader-container-full">
+      <Loader2 className="animate-spin" size={40} />
+      <span>Loading Registry...</span>
+    </div>
+  );
 
   return (
-    <div className="dashboard-card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2>User Management</h2>
-        <Link to="/users/create" className="btn-small"><UserPlus size={16} /> New User</Link>
-      </div>
-      <table className="user-table">
-        <thead>
-          <tr>
-            <th>User</th>
-            <th>Email</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(u => (
-            <tr key={u.id}>
-              <td>{u.username}</td>
-              <td>{u.email}</td>
-              <td><span className={`badge ${u.role}`}>{u.role}</span></td>
-              <td>
-                <span className={`status-dot ${u.is_active ? 'active' : 'inactive'}`}></span>
-                {u.is_active ? 'Active' : 'Disabled'}
-              </td>
-              <td>
-                <button onClick={() => toggleUser(u.id)} className="icon-btn">
-                  {u.is_active ? <ToggleRight color="#4ade80" /> : <ToggleLeft color="#94a3b8" />}
-                </button>
-              </td>
-            </tr>
+    <div className="console-workspace-unified">
+      {/* 🏷️ High-Density Inline Header - EVERYTHING IN ONE LINE */}
+      <header className="unified-console-header">
+        <div className="header-brand-group">
+          <h1 className="h1-compact">Identity Audit</h1>
+          <div className="header-sep-mini"></div>
+          <p className="p-inline-audit">v{pagination.page}/{pagination.pages} • {pagination.total} Validated</p>
+        </div>
+
+        <div className="telemetry-ribbon-inline">
+          {stats.map((s, idx) => (
+            <div key={idx} className="telemetry-item">
+              <div className="telemetry-icon" style={{ color: s.color }}>{s.icon}</div>
+              <span className="telemetry-label">{s.label}: </span>
+              <span className="telemetry-value">{s.value}</span>
+            </div>
           ))}
-        </tbody>
-      </table>
+        </div>
+
+        <Link to="/users/create" className="btn-primary-console-compact">
+          <UserPlus size={16} />
+          <span>Provision</span>
+        </Link>
+      </header>
+
+      {/* 💠 Unified Data Canvas */}
+      <div className="dashboard-card-modern datagrid-container-unified">
+        <div className="datagrid-toolbar-compact">
+          <div className="toolbar-search-compact">
+            <Search size={16} className="search-icon" />
+            <input 
+              type="text" 
+              placeholder="Search identities..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="table-responsive">
+          <table className="console-table">
+            <thead>
+              <tr>
+                <th>Identity Cluster</th>
+                <th>Privileges</th>
+                <th>Network Status</th>
+                <th>Communication</th>
+                <th className="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUsers.map(u => (
+                <tr key={u.id} className="console-row">
+                  <td>
+                    <div className="user-cell">
+                      <div className="user-avatar-modern">
+                        {(u.username || 'U').charAt(0).toUpperCase()}
+                        <div className={`avatar-status-pip ${u.is_active ? 'online' : 'offline'}`}></div>
+                      </div>
+                      <div className="user-info-modern">
+                        <span className="username-main">{u.username || 'Unknown'}</span>
+                        <div className="user-metadata-sub">
+                          <span className="user-id">UID-{String(u.id).padStart(4, '0')}</span>
+                          <span className="user-dot-sep">•</span>
+                          <span className="user-joined">{new Date(u.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`badge-modern ${u.role || 'user'}`}>
+                      {(u.role || 'user') === 'admin' ? <ShieldCheck size={12} /> : <Shield size={12} />}
+                      {u.role || 'user'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="status-cell-modern">
+                      <span className={`status-dot-pulse ${u.is_active ? 'active' : 'inactive'}`}></span>
+                      {u.is_active ? 'Authorized' : 'De-provisioned'}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="email-link-cell"><Mail size={14} /> {u.email}</div>
+                  </td>
+                  <td className="text-right">
+                    <div className="action-row-modern">
+                      <button 
+                        onClick={() => toggleUser(u)} 
+                        className={`action-btn-console ${u.is_active ? 'success-toggle' : 'off-toggle'}`}
+                        title={u.is_active ? 'De-provision Access' : 'Authorize Access'}
+                      >
+                        {u.is_active ? <ToggleRight size={24} strokeWidth={2.5} /> : <ToggleLeft size={24} strokeWidth={2.5} />}
+                      </button>
+                      
+                      <button 
+                        className="action-btn-console edit-btn" 
+                        onClick={() => navigate(`/users/edit/${u.id}`)}
+                        title="Update Identity"
+                      >
+                        <Pencil size={24} strokeWidth={2.5} />
+                      </button>
+
+                      <button 
+                        className="action-btn-console delete-btn" 
+                        onClick={() => deleteUser(u.id)}
+                        title="Revoke Access"
+                      >
+                        <Trash2 size={24} strokeWidth={2.5} />
+                      </button>
+                    </div>
+
+
+
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <footer className="pagination-footer-console">
+          <div className="pagination-info">
+            Records <span>{(pagination.page-1)*10 + 1}-{Math.min(pagination.page*10, pagination.total)}</span> of <span>{pagination.total}</span>
+          </div>
+          <div className="pagination-nav">
+            <button disabled={pagination.page <= 1} onClick={() => fetchUsers(pagination.page - 1)}>
+              <ChevronLeft size={18} />
+            </button>
+            <div className="page-indices">
+              {[...Array(pagination.pages)].map((_, i) => (
+                <button 
+                  key={i + 1} 
+                  className={pagination.page === i + 1 ? 'active' : ''}
+                  onClick={() => fetchUsers(i + 1)}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button disabled={pagination.page >= pagination.pages} onClick={() => fetchUsers(pagination.page + 1)}>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 };

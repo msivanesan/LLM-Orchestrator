@@ -474,6 +474,7 @@ def quick_stream():
                             except (GeneratorExit, ConnectionResetError):
                                 client_disconnected = True
                                 logger.info(f"Client disconnected during quick-stream session {session_id}")
+                                break
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
         finally:
@@ -589,6 +590,7 @@ def stream_chat(session_id):
                             except (GeneratorExit, ConnectionResetError):
                                 client_disconnected = True
                                 logger.info(f"Client disconnected during stream session {session_id}")
+                                break
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
         finally:

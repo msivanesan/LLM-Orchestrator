@@ -1,14 +1,21 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, ArrowRight, BookOpen, LogIn, Sun, Moon } from 'lucide-react';
+import { 
+  ShieldCheck, ArrowRight, BookOpen, LogIn, Sun, Moon, 
+  Zap, Shield, Brain, Activity, Globe, Cpu, ChevronRight
+} from 'lucide-react';
 
 const HomePage = ({ theme, toggleTheme }) => {
   return (
     <div className="home-container">
-      {/* 💎 Glass Navbar */}
+      {/* 🌌 Background Blobs for Atmosphere */}
+      <div className="bg-blob blob-1"></div>
+      <div className="bg-blob blob-2"></div>
+
+      {/* 💎 Premium Glass Navbar */}
       <nav className="home-nav">
         <div className="home-brand">
-          <ShieldCheck color="#E11D48" size={32} />
+          <ShieldCheck color="var(--primary)" size={32} />
           <span>Darkny</span>
         </div>
         <div className="home-nav-links">
@@ -26,31 +33,135 @@ const HomePage = ({ theme, toggleTheme }) => {
         </div>
       </nav>
 
-      {/* 🚀 Hero Section */}
-      <header className="hero-section">
-        <div className="hero-content">
-          <div className="hero-badge">Next-Gen AI Management</div>
-          <h1>Orchestrate Your <span>AI Workforce</span> With Precision</h1>
+      {/* 🚀 Immersive Hero Section */}
+      <header className="hero-section-wide">
+        <div className="hero-content-modern">
+          <div className="hero-badge-glow">
+            <Zap size={14} fill="currentColor" />
+            <span>v1.2 Stable Release</span>
+          </div>
+          <h1>Orchestrate Your <span>AI workforce</span> With Absolute Precision</h1>
           <p>
-            The premium, enterprise-grade orchestrator for large language models. 
-            Manage users, deploy API keys, and monitor your AI nodes in one sleek, 
-            glass-encrypted interface.
+            The production-grade ecosystem for secure AI model orchestration, centralized identity, 
+            and persistent LLM memory. Built for scale, designed for stability.
           </p>
-          <div className="hero-actions">
+          <div className="hero-actions-row">
             <Link to="/login" className="hero-primary-btn">
-              Get Started <ArrowRight size={20} />
+              Launch Console <ArrowRight size={20} />
             </Link>
-            <Link to="/docs" className="hero-secondary-btn">
-              View Documentation
+            <Link to="/docs" className="hero-outline-btn">
+              Read Documentation
             </Link>
           </div>
+          
+          <div className="hero-stats">
+            <div className="stat-item">
+              <span className="stat-val">99.9%</span>
+              <span className="stat-label">Uptime</span>
+            </div>
+            <div className="stat-divider"></div>
+            <div className="stat-item">
+              <span className="stat-val">5ms</span>
+              <span className="stat-label">Latency</span>
+            </div>
+            <div className="stat-divider"></div>
+            <div className="stat-item">
+              <span className="stat-val">256+</span>
+              <span className="stat-label">Models</span>
+            </div>
+          </div>
         </div>
-        <div className="hero-visual">
-           {/* Floating Glass Cards to show off the UI theme */}
-           <div className="glass-card-float c1"></div>
-           <div className="glass-card-float c2"></div>
+
+        <div className="hero-visual-container">
+          <div className="floating-card c1">
+            <div className="card-header"><Brain size={16} /> <span>Query Engine</span></div>
+            <div className="card-line"></div>
+            <div className="card-line short"></div>
+          </div>
+          <div className="floating-card c2">
+            <div className="card-header"><Shield size={16} /> <span>Auth Sidecar</span></div>
+            <div className="card-pill">Active</div>
+          </div>
+          <div className="floating-card c3">
+            <div className="card-header"><Activity size={16} /> <span>APM Live</span></div>
+            <div className="card-graph">
+              <span></span><span></span><span></span><span></span>
+            </div>
+          </div>
+          <div className="orb-glow"></div>
         </div>
       </header>
+
+      {/* 🌀 Scroll Down Indicator */}
+      <div className="scroll-indicator">
+        <span>Discover Features</span>
+        <div className="mouse"></div>
+      </div>
+
+      {/* 🛠️ Features Grid */}
+      <section className="features-section">
+        <div className="section-header">
+          <span className="section-tag">Core Capabilities</span>
+          <h2>A Unified Platform for <span>Enterprise AI</span></h2>
+        </div>
+
+        <div className="features-grid-modern">
+          <div className="feature-card-premium">
+            <div className="feature-icon-wrapper"><Cpu size={24} /></div>
+            <h3>Model Gateway</h3>
+            <p>Deploy and orchestrate local LLMs (Ollama/vLLM) with role-based model enforcement.</p>
+            <Link to="/docs#models" className="feature-link">Learn more <ChevronRight size={14} /></Link>
+          </div>
+
+          <div className="feature-card-premium">
+            <div className="feature-icon-wrapper"><ShieldCheck size={24} /></div>
+            <h3>Security Sidecar</h3>
+            <p>Nginx-powered gateway with integrated API key validation and rate limiting.</p>
+            <Link to="/docs#auth" className="feature-link">Learn more <ChevronRight size={14} /></Link>
+          </div>
+
+          <div className="feature-card-premium">
+            <div className="feature-icon-wrapper"><Brain size={24} /></div>
+            <h3>RAG Memory</h3>
+            <p>Persistent conversation state and fact extraction with integrated ChromaDB support.</p>
+            <Link to="/docs#embed" className="feature-link">Learn more <ChevronRight size={14} /></Link>
+          </div>
+
+          <div className="feature-card-premium">
+            <div className="feature-icon-wrapper"><Globe size={24} /></div>
+            <h3>Observability</h3>
+            <p>Full APM stack with Prometheus and Grafana for real-time performance tracking.</p>
+            <Link to="/docs#monitoring" className="feature-link">Learn more <ChevronRight size={14} /></Link>
+          </div>
+        </div>
+      </section>
+
+      {/* 🚀 CTA Section */}
+      <section className="cta-banner">
+        <div className="cta-content">
+          <h2>Ready to scale your AI fleet?</h2>
+          <p>Get started today with the industry's most stable orchestration layer.</p>
+          <Link to="/login" className="cta-btn">Create Your First Instance</Link>
+        </div>
+      </section>
+
+      {/* 🏮 Footer */}
+      <footer className="home-footer">
+        <div className="footer-top">
+          <div className="footer-brand">
+            <ShieldCheck color="var(--primary)" size={24} />
+            <span>Darkny</span>
+          </div>
+          <div className="footer-links">
+            <Link to="/docs">Documentation</Link>
+            <a href="https://github.com/msivanesan/LLM-Orchestrator">Github</a>
+            <Link to="/login">Console</Link>
+          </div>
+        </div>
+        <div className="footer-bottom">
+          <p>© 2026 Darkny AI Orchestration Infrastructure. All rights reserved.</p>
+        </div>
+      </footer>
     </div>
   );
 };

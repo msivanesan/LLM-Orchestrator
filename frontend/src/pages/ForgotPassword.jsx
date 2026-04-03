@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Loader2, Key } from 'lucide-react';
+import { Mail, Loader2, Key, Sun, Moon } from 'lucide-react';
 import api from '../lib/api';
 
-const ForgotPassword = () => {
+const ForgotPassword = ({ theme, toggleTheme }) => {
     const [email, setEmail] = useState('');
     const [feedback, setFeedback] = useState({ message: '', type: '' });
     const [loading, setLoading] = useState(false);
@@ -34,7 +34,12 @@ const ForgotPassword = () => {
     };
 
     return (
-        <div className="container">
+        <div className="container" style={{ position: 'relative' }}>
+            <header style={{ position: 'absolute', top: '1.5rem', right: '1.5rem' }}>
+                <button className="theme-toggle-btn" onClick={toggleTheme}>
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                </button>
+            </header>
             <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
                 <div style={{ display: 'inline-flex', padding: '1rem', background: 'rgba(99, 102, 241, 0.1)', borderRadius: '16px', marginBottom: '1.5rem' }}>
                     <Key size={32} color="#6366f1" />

@@ -26,38 +26,85 @@ export const ENDPOINTS = {
   CHAT_HEALTH:     `${CHAT_BASE}/health`,
 };
 
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 const setupInterceptors = (instance) => {
+  // ── Request Interceptor (Mandatory Identity Header) ──
   instance.interceptors.request.use((config) => {
     const token = localStorage.getItem('access_token');
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
-  });
+  }, (err) => Promise.reject(err));
 
+  // ── Response Interceptor (Atomic Refresh Synchronizer) ──
   instance.interceptors.response.use(
     (response) => response,
     async (error) => {
       const originalRequest = error.config;
+
+      // 401 Unauthorized: Trigger Atomic Refresh cycle
       if (error.response?.status === 401 && !originalRequest._retry) {
-        originalRequest._retry = true;
-        try {
-          const refreshToken = localStorage.getItem('refresh_token');
-          const res = await axios.post(ENDPOINTS.REFRESH, {}, {
-            headers: { Authorization: `Bearer ${refreshToken}` }
-          });
-          localStorage.setItem('access_token', res.data.access_token);
-          localStorage.setItem('refresh_token', res.data.refresh_token);
-          return instance(originalRequest);
-        } catch (err) {
-          localStorage.clear();
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
-          }
+        if (isRefreshing) {
+          // Queue this request and wait for current refresh to complete
+          return new Promise((resolve, reject) => {
+            failedQueue.push({ resolve, reject });
+          })
+            .then((token) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              return instance(originalRequest);
+            })
+            .catch((err) => Promise.reject(err));
         }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        return new Promise(async (resolve, reject) => {
+          try {
+            const refreshToken = localStorage.getItem('refresh_token');
+            if (!refreshToken) throw new Error("No refresh-credential available");
+
+            const res = await axios.post(ENDPOINTS.REFRESH, {}, {
+              headers: { Authorization: `Bearer ${refreshToken}` }
+            });
+
+            const { access_token, refresh_token } = res.data;
+            localStorage.setItem('access_token', access_token);
+            localStorage.setItem('refresh_token', refresh_token);
+
+            // Update original request and retry
+            originalRequest.headers.Authorization = `Bearer ${access_token}`;
+            processQueue(null, access_token);
+            resolve(instance(originalRequest));
+          } catch (refreshErr) {
+            processQueue(refreshErr, null);
+            localStorage.clear();
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+            reject(refreshErr);
+          } finally {
+            isRefreshing = false;
+          }
+        });
       }
       return Promise.reject(error);
     }
   );
 };
+
 
 export const api       = axios.create({ baseURL: API_BASE });
 export const apikeyApi = axios.create({ baseURL: APIKEY_BASE });

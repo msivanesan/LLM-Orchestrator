@@ -106,18 +106,33 @@ const KeyList = () => {
                                         {k.is_active ? 'Active' : 'Revoked'}
                                     </td>
                                     <td>
-                                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                            <button className="icon-btn" onClick={() => updateRPM(k.id, k.rpm)} title="Edit Rate Limit">
-                                                <Edit2 size={18} color="var(--primary)" />
+                                        <div className="action-row-modern">
+                                            <button 
+                                                className="action-btn-console edit-btn" 
+                                                onClick={() => updateRPM(k.id, k.rpm)} 
+                                                title="Edit Rate Limit"
+                                            >
+                                                <Edit2 size={24} strokeWidth={2.5} />
                                             </button>
-                                            <button className="icon-btn" onClick={() => toggleKeyStatus(k.id)} title={k.is_active ? 'Revoke' : 'Active'}>
-                                                <Shield size={18} color={k.is_active ? '#f59e0b' : '#10b981'} />
+                                            
+                                            <button 
+                                                className={`action-btn-console ${k.is_active ? 'warning-toggle' : 'success-toggle'}`} 
+                                                onClick={() => toggleKeyStatus(k.id)} 
+                                                title={k.is_active ? 'Revoke Key' : 'Authorize Key'}
+                                            >
+                                                <Shield size={24} strokeWidth={2.5} />
                                             </button>
-                                            <button className="icon-btn" onClick={() => deleteKey(k.id)} title="Delete">
-                                                <Trash2 size={18} color="var(--danger)" />
+
+                                            <button 
+                                                className="action-btn-console delete-btn" 
+                                                onClick={() => deleteKey(k.id)} 
+                                                title="Delete Key"
+                                            >
+                                                <Trash2 size={24} strokeWidth={2.5} />
                                             </button>
                                         </div>
                                     </td>
+
                                 </tr>
                             ))}
                         </tbody>

@@ -15,6 +15,7 @@ import HomePage from './pages/Home';
 import LoginPage from './pages/Login';
 import UserList from './pages/UserList';
 import CreateUser from './pages/UserCreate';
+import UserEdit from './pages/UserEdit';
 import ManageProfile from './pages/ManageProfile';
 import ForgotPassword from './pages/ForgotPassword';
 import VerifyOTP from './pages/VerifyOTP';
@@ -95,15 +96,21 @@ function App() {
           element={user ? <Navigate to="/" /> : <LoginPage onLogin={setUser} theme={theme} toggleTheme={toggleTheme} />} 
         />
         
-        {/* Protected Routes */}
+        {/* Admin Only Identity Routes */}
         <Route 
           path="/users" 
-          element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><UserList /></Layout> : <Navigate to="/login" />} 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><UserList /></Layout> : (user ? <Navigate to="/chat" /> : <Navigate to="/login" />)} 
         />
         <Route 
           path="/users/create" 
-          element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><CreateUser /></Layout> : <Navigate to="/login" />} 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><CreateUser /></Layout> : (user ? <Navigate to="/chat" /> : <Navigate to="/login" />)} 
         />
+        <Route 
+          path="/users/edit/:id" 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><UserEdit /></Layout> : (user ? <Navigate to="/chat" /> : <Navigate to="/login" />)} 
+        />
+        
+        {/* Protected Settings (All Users) */}
         <Route 
           path="/settings" 
           element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><ManageProfile /></Layout> : <Navigate to="/login" />} 
@@ -112,26 +119,28 @@ function App() {
         {/* Admin Only API Key Routes */}
         <Route 
           path="/keys" 
-          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><KeyList /></Layout> : <Navigate to="/" />} 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><KeyList /></Layout> : (user ? <Navigate to="/chat" /> : <Navigate to="/login" />)} 
         />
         <Route 
           path="/keys/create" 
-          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><KeyCreate /></Layout> : <Navigate to="/" />} 
+          element={user?.role === 'admin' ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><KeyCreate /></Layout> : (user ? <Navigate to="/chat" /> : <Navigate to="/login" />)} 
         />
+
         
         {/* Chat Route */}
         <Route
-          path="/chat"
+          path="/chat/:sessionId?"
           element={user ? <Layout user={user} onLogout={handleLogout} theme={theme} toggleTheme={toggleTheme}><Chat user={user} /></Layout> : <Navigate to="/login" />}
         />
+
         <Route
           path="/docs"
           element={<Docs theme={theme} toggleTheme={toggleTheme} />}
         />
         
         {/* Public Password Recovery Routes */}
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/verify-otp" element={<VerifyOTP />} />
+        <Route path="/forgot-password" element={<ForgotPassword theme={theme} toggleTheme={toggleTheme} />} />
+        <Route path="/verify-otp" element={<VerifyOTP theme={theme} toggleTheme={toggleTheme} />} />
         
         <Route path="/" element={user ? <Navigate to={user.role === 'admin' ? "/users" : "/chat"} /> : <HomePage theme={theme} toggleTheme={toggleTheme} />} />
         <Route path="*" element={<Navigate to="/" />} />

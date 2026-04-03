@@ -34,7 +34,7 @@ def get_users():
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 10, type=int)
     
-    pagination = User.query.paginate(page=page, per_page=per_page, error_out=False)
+    pagination = User.query.order_by(User.id.asc()).paginate(page=page, per_page=per_page, error_out=False)
     
     return jsonify({
         "items": [u.to_dict() for u in pagination.items],
@@ -129,6 +129,37 @@ def get_current_user():
 def get_user(user_id):
     user = User.query.get_or_404(user_id)
     return jsonify(user.to_dict())
+
+@user_bp.route('/<int:user_id>', methods=['PUT', 'PATCH'])
+@admin_required
+def update_user(user_id):
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    if 'username' in data: user.username = data['username']
+    if 'email' in data: user.email = data['email']
+    if 'role' in data and data['role'] in ['admin', 'user']: user.role = data['role']
+    if 'is_active' in data: user.is_active = data['is_active']
+    if 'password' in data and data['password']:
+        user.password_hash = generate_password_hash(data['password'])
+    
+    db.session.commit()
+    current_app.logger.info(f"User updated: {user.username} by admin {get_jwt_identity()}")
+    return jsonify(user.to_dict())
+
+@user_bp.route('/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    # Prevent self-deletion if needed, but for now allow direct admin delete
+    identity = str(get_jwt_identity())
+    if str(user.id) == identity:
+        return jsonify({"message": "You cannot delete your own admin account"}), 403
+        
+    db.session.delete(user)
+    db.session.commit()
+    current_app.logger.info(f"User deleted: {user.username} by admin {identity}")
+    return jsonify({"message": "User deleted successfully"}), 200
 
 @user_bp.route('/login', methods=['POST'])
 def login():

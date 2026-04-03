@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Key, User, Lock, Loader2, Moon, Sun } from 'lucide-react';
+import { Key, User, Lock, Loader2, Moon, Sun, ShieldCheck, ArrowLeft, Terminal } from 'lucide-react';
 import api from '../lib/api';
 
 const LoginPage = ({ onLogin, theme, toggleTheme }) => {
@@ -19,7 +19,6 @@ const LoginPage = ({ onLogin, theme, toggleTheme }) => {
       localStorage.setItem('refresh_token', res.data.refresh_token);
       if (res.status === 200) {
         onLogin(res.data.user);
-        // 🚀 SMART REDIRECT BASED ON ROLE
         const role = res.data.user.role;
         if (role === 'admin') {
           navigate('/users');
@@ -35,60 +34,103 @@ const LoginPage = ({ onLogin, theme, toggleTheme }) => {
   };
 
   return (
-    <div className="container" style={{ marginTop: '10vh', position: 'relative' }}>
-      <header style={{ position: 'absolute', top: '1.5rem', right: '1.5rem' }}>
-        <button className="theme-toggle-btn" onClick={toggleTheme}>
-          {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-        </button>
-      </header>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <Key size={40} color="#E11D48" style={{ marginBottom: '1rem' }} />
-        <h1>Darkny</h1>
-        <p className="subtitle">Sign in to your AI Orchestrator</p>
+    <div className="login-master-container">
+      {/* 🎆 Deep Background Glows */}
+      <div className="bg-blob-login blob-l1"></div>
+      <div className="bg-blob-login blob-l2"></div>
+
+      {/* 🔙 Back to Site */}
+      <Link to="/" className="back-link">
+        <ArrowLeft size={18} />
+        <span>Back to Website</span>
+      </Link>
+
+      <div className="login-split">
+        {/* 🎨 Left Side - Branded Visual */}
+        <div className="login-visual-side">
+          <div className="visual-content">
+            <div className="floating-badge-login">
+              <ShieldCheck size={20} />
+              <span>Identity Secure</span>
+            </div>
+            <h1>Access the <span>Darkny</span> Core</h1>
+            <p>Manage your enterprise AI nodes with encrypted precision and real-time observability.</p>
+            
+            <div className="terminal-preview">
+              <div className="term-header">
+                <div className="dot"></div><div className="dot"></div><div className="dot"></div>
+                <span>auth_gateway.log</span>
+              </div>
+              <div className="term-body">
+                <div className="term-line"><span>$</span> init_handshake --node=AI-Core-01</div>
+                <div className="term-line success"><span>✓</span> Identity verified (03ms)</div>
+                <div className="term-line"><span>$</span> establishing_session...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 🔐 Right Side - Login Form */}
+        <div className="login-form-side">
+          <div className="login-glass-card">
+            <header className="login-header-controls">
+              <button className="theme-toggle-btn" onClick={toggleTheme}>
+                {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+              </button>
+            </header>
+
+            <div className="login-card-top">
+              <div className="login-logo-ring">
+                <Key size={32} color="var(--primary)" />
+              </div>
+              <h2>Sign In</h2>
+              <p>Welcome back! Enter your developer credentials.</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="login-form">
+              <div className="form-group-modern">
+                <label>Developer ID</label>
+                <div className="input-group-modern">
+                  <User size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Username" 
+                    required 
+                    value={formData.username}
+                    onChange={e => setFormData({...formData, username: e.target.value})} 
+                  />
+                </div>
+              </div>
+
+              <div className="form-group-modern">
+                <label>Security Key</label>
+                <div className="input-group-modern">
+                  <Lock size={18} />
+                  <input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    required 
+                    value={formData.password}
+                    onChange={e => setFormData({...formData, password: e.target.value})} 
+                  />
+                </div>
+              </div>
+
+              <div className="login-actions-util">
+                <Link to="/forgot-password">Security Recovery?</Link>
+              </div>
+
+              <button type="submit" className="login-submit-btn" disabled={loading}>
+                {loading ? <Loader2 className="animate-spin" /> : <>Access Console <ArrowLeft className="rotate-180" size={18} /></>}
+              </button>
+
+              {feedback.message && (
+                <div className={`feedback ${feedback.type}`}>{feedback.message}</div>
+              )}
+            </form>
+          </div>
+        </div>
       </div>
-      
-      <form onSubmit={handleLogin}>
-        <div className="form-group">
-          <label>Username</label>
-          <div className="input-wrapper">
-            <User />
-            <input 
-              type="text" 
-              placeholder="Username" 
-              required 
-              value={formData.username}
-              onChange={e => setFormData({...formData, username: e.target.value})} 
-            />
-          </div>
-        </div>
-        <div className="form-group">
-          <label>Password</label>
-          <div className="input-wrapper">
-            <Lock />
-            <input 
-              type="password" 
-              placeholder="••••••••" 
-              required 
-              value={formData.password}
-              onChange={e => setFormData({...formData, password: e.target.value})} 
-            />
-          </div>
-        </div>
-        
-        <button type="submit" disabled={loading}>
-          {loading ? <Loader2 className="animate-spin" /> : 'Login'}
-        </button>
-        
-        <div style={{ textAlign: 'right', marginTop: '1rem' }}>
-          <Link to="/forgot-password" style={{ color: '#E11D48', textDecoration: 'none', fontSize: '0.875rem' }}>
-            Forgot Password?
-          </Link>
-        </div>
-        
-        {feedback.message && (
-          <div className={`feedback ${feedback.type}`}>{feedback.message}</div>
-        )}
-      </form>
     </div>
   );
 };

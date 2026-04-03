@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { CheckCircle, Lock, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { CheckCircle, Lock, Loader2, ShieldCheck, Sun, Moon } from 'lucide-react';
 import api from '../lib/api';
 
-const VerifyOTP = () => {
+const VerifyOTP = ({ theme, toggleTheme }) => {
     const [email, setEmail] = useState('');
     const [formData, setFormData] = useState({ otp: '', newPassword: '' });
     const [feedback, setFeedback] = useState({ message: '', type: '' });
@@ -68,7 +68,12 @@ const VerifyOTP = () => {
     };
 
     return (
-        <div className="container" style={{ maxWidth: '460px' }}>
+        <div className="container" style={{ maxWidth: '460px', position: 'relative' }}>
+            <header style={{ position: 'absolute', top: '1.5rem', right: '1.5rem' }}>
+                <button className="theme-toggle-btn" onClick={toggleTheme}>
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                </button>
+            </header>
             <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                 <div style={{ display: 'inline-flex', padding: '1rem', background: 'rgba(52, 211, 153, 0.1)', borderRadius: '16px', marginBottom: '1.5rem' }}>
                     <ShieldCheck size={32} color="#10b981" />
