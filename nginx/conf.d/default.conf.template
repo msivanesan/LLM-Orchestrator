@@ -2,7 +2,7 @@ server {
     listen 80;
 
     # Global CORS Handling
-    add_header 'Access-Control-Allow-Origin' 'http://localhost:5173' always;
+    add_header 'Access-Control-Allow-Origin' '*' always;
     add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE, PATCH' always;
     add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization,X-API-KEY' always;
     add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
@@ -79,4 +79,13 @@ server {
 
     error_page 403 = @unauthorized;
     location @unauthorized { add_header Content-Type application/json; return 401 '{"status": 401, "error": "Unauthorized", "message": "Invalid API Key."}'; }
+
+    # 🖼️ 6. Enterprise UI (Frontend Proxy)
+    location / {
+        proxy_pass http://frontend:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }

@@ -23,6 +23,8 @@ services:
       - user
       - apikey
       - ai
+      - chat
+      - frontend
     restart: always
     networks:
       - llm_net
@@ -284,6 +286,17 @@ services:
         condition: service_started
       chat:
         condition: service_started
+    networks:
+      - llm_net
+
+  frontend:
+    build: 
+      context: ./frontend
+    image: llm-frontend:latest
+    container_name: llm_orchestrator_ui
+    environment:
+      - VITE_API_GATEWAY=
+    restart: always
     networks:
       - llm_net
 

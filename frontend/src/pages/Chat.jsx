@@ -94,7 +94,22 @@ const MD_COMPONENTS = {
     const codeText = String(children).replace(/\n$/, '');
     
     if (inline) {
-      return <code className="modern-inline-code" {...props}>{children}</code>;
+      return (
+        <code 
+          className="modern-inline-code" 
+          style={{ 
+            background: 'rgba(255,255,255,0.06)', 
+            padding: '0.2rem 0.4rem', 
+            borderRadius: '6px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            fontSize: '0.85em',
+            fontFamily: 'monaco, Consolas, "Lucida Console", monospace'
+          }} 
+          {...props}
+        >
+          {children}
+        </code>
+      );
     }
 
     // High-performance block rendering (with or without language)
@@ -103,7 +118,7 @@ const MD_COMPONENTS = {
         <div className="code-header-v2">
           <div className="header-meta">
             <span className="lang-dot"></span>
-            <span className="lang-name">{match ? match[1] : 'Plain Text'}</span>
+            <span className="lang-name">{match ? match[1].toUpperCase() : 'PLAIN TEXT'}</span>
           </div>
           <CopyButton text={codeText} />
         </div>
