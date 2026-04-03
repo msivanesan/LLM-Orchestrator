@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   ShieldCheck, Users, Key, MessageSquare, LogOut, Sun, Moon
 } from 'lucide-react';
+import logoImg from '../assets/logo.png';
+import faviconImg from '../assets/logofav.png';
 
 const Layout = ({ user, onLogout, children, theme, toggleTheme }) => {
   const location = useLocation();
@@ -16,7 +18,7 @@ const Layout = ({ user, onLogout, children, theme, toggleTheme }) => {
         <aside className="chat-mini-sidebar">
           <div className="mini-sidebar-top">
             <div className="brand-icon-ring mini">
-              <ShieldCheck size={20} color="white" />
+              <img src={faviconImg} alt="Darkny" className="mini-sidebar-logo-img" />
             </div>
           </div>
 
@@ -42,14 +44,8 @@ const Layout = ({ user, onLogout, children, theme, toggleTheme }) => {
         <aside className="sidebar">
           <div className="sidebar-brand-container">
             <div className="sidebar-brand">
-              <div className="brand-icon-ring">
-                <ShieldCheck size={22} color="white" />
-              </div>
-              <div className="brand-text">
-                <span className="brand-main">Darkny</span>
-                <span className="brand-sub">AI CORE</span>
-              </div>
-            </div>
+              <img src={logoImg} alt="Darkny" className="sidebar-brand-logo" />
+          </div>
             
             <button className="sidebar-theme-toggle" onClick={toggleTheme} title="Toggle Theme">
               {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}

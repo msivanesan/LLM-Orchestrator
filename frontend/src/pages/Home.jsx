@@ -4,6 +4,7 @@ import {
   ShieldCheck, ArrowRight, BookOpen, LogIn, Sun, Moon, 
   Zap, Shield, Brain, Activity, Globe, Cpu, ChevronRight
 } from 'lucide-react';
+import logoImg from '../assets/logo.png';
 
 const HomePage = ({ theme, toggleTheme }) => {
   return (
@@ -15,8 +16,7 @@ const HomePage = ({ theme, toggleTheme }) => {
       {/* 💎 Premium Glass Navbar */}
       <nav className="home-nav">
         <div className="home-brand">
-          <ShieldCheck color="var(--primary)" size={32} />
-          <span>Darkny</span>
+          <img src={logoImg} alt="Darkny" className="home-nav-logo" />
         </div>
         <div className="home-nav-links">
           <Link to="/docs" className="nav-link">
@@ -149,8 +149,7 @@ const HomePage = ({ theme, toggleTheme }) => {
       <footer className="home-footer">
         <div className="footer-top">
           <div className="footer-brand">
-            <ShieldCheck color="var(--primary)" size={24} />
-            <span>Darkny</span>
+            <img src={logoImg} alt="Darkny" className="footer-nav-logo" />
           </div>
           <div className="footer-links">
             <Link to="/docs">Documentation</Link>

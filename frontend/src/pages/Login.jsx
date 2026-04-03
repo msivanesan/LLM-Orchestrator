@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Key, User, Lock, Loader2, Moon, Sun, ShieldCheck, ArrowLeft, Terminal } from 'lucide-react';
+import { User, Lock, Loader2, Moon, Sun, ArrowLeft, Terminal } from 'lucide-react';
 import api from '../lib/api';
+import logoImg from '../assets/logo.png';
+import faviconImg from '../assets/logofav.png';
 
 const LoginPage = ({ onLogin, theme, toggleTheme }) => {
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -15,9 +17,9 @@ const LoginPage = ({ onLogin, theme, toggleTheme }) => {
     setFeedback({ message: '', type: '' });
     try {
       const res = await api.post('/login', { username: formData.username, password: formData.password });
-      localStorage.setItem('access_token', res.data.access_token);
-      localStorage.setItem('refresh_token', res.data.refresh_token);
       if (res.status === 200) {
+        localStorage.setItem('access_token', res.data.access_token);
+        localStorage.setItem('refresh_token', res.data.refresh_token);
         onLogin(res.data.user);
         const role = res.data.user.role;
         if (role === 'admin') {
@@ -32,6 +34,7 @@ const LoginPage = ({ onLogin, theme, toggleTheme }) => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="login-master-container">
@@ -49,11 +52,7 @@ const LoginPage = ({ onLogin, theme, toggleTheme }) => {
         {/* 🎨 Left Side - Branded Visual */}
         <div className="login-visual-side">
           <div className="visual-content">
-            <div className="floating-badge-login">
-              <ShieldCheck size={20} />
-              <span>Identity Secure</span>
-            </div>
-            <h1>Access the <span>Darkny</span> Core</h1>
+            <img src={logoImg} alt="Darkny" className="login-brand-logo" />
             <p>Manage your enterprise AI nodes with encrypted precision and real-time observability.</p>
             
             <div className="terminal-preview">
@@ -81,7 +80,7 @@ const LoginPage = ({ onLogin, theme, toggleTheme }) => {
 
             <div className="login-card-top">
               <div className="login-logo-ring">
-                <Key size={32} color="var(--primary)" />
+                <img src={faviconImg} alt="Darkny" className="login-card-symbol" />
               </div>
               <h2>Sign In</h2>
               <p>Welcome back! Enter your developer credentials.</p>

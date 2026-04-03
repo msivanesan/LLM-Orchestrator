@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   UserPlus, Loader2, ToggleRight, ToggleLeft, Search, 
-  MoreHorizontal, Mail, Shield, ShieldCheck, 
+  Mail, Shield, ShieldCheck, 
   Activity, Users as UsersIcon, Trash2, Pencil,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -11,15 +11,15 @@ import api from '../lib/api';
 const UserList = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeMenu, setActiveMenu] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
   
-  const menuRef = useRef(null);
   const navigate = useNavigate();
 
   const fetchUsers = async (page = 1) => {
     setLoading(true);
+    setError('');
     try {
       const res = await api.get(`/?page=${page}&per_page=10`);
       setUsers(res.data.items || []);
@@ -29,7 +29,7 @@ const UserList = () => {
         total: res.data.total
       });
     } catch (err) {
-      console.error(err);
+      setError('Failed to load users. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -37,11 +37,6 @@ const UserList = () => {
 
   useEffect(() => { 
     fetchUsers(1);
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setActiveMenu(null);
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const toggleUser = async (u) => {
@@ -70,15 +65,25 @@ const UserList = () => {
   );
 
   const stats = [
-    { label: 'Identities', value: pagination.total, icon: <UsersIcon size={14} />, color: 'var(--primary)' },
-    { label: 'Admins', value: users.filter(u => u.role === 'admin').length, icon: <ShieldCheck size={14} />, color: '#6366f1' },
-    { label: 'Active', value: users.filter(u => u.is_active).length, icon: <Activity size={14} />, color: '#10b981' }
+    { label: 'Total Identities', value: pagination.total, icon: <UsersIcon size={14} />, color: 'var(--primary)' },
+    // Note: Admins/Active counts reflect current page only (10 users per page)
+    { label: 'Admins (this page)', value: users.filter(u => u.role === 'admin').length, icon: <ShieldCheck size={14} />, color: '#6366f1' },
+    { label: 'Active (this page)', value: users.filter(u => u.is_active).length, icon: <Activity size={14} />, color: '#10b981' }
   ];
 
   if (loading && users.length === 0) return (
     <div className="loader-container-full">
       <Loader2 className="animate-spin" size={40} />
       <span>Loading Registry...</span>
+    </div>
+  );
+
+  if (error) return (
+    <div className="loader-container-full">
+      <span style={{ color: 'var(--primary)', fontSize: '1rem', fontWeight: 700 }}>{error}</span>
+      <button className="btn-primary-console-compact" onClick={() => fetchUsers(pagination.page)}>
+        Retry
+      </button>
     </div>
   );
 

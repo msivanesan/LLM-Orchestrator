@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { chatApi, ENDPOINTS } from '../lib/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -10,7 +11,7 @@ import {
   Pin, PinOff, AlertCircle, StopCircle, Copy, CheckCheck,
   Sparkles, Command, Shield, ArrowUp, RefreshCcw
 } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import logoImg from '../assets/logo.png';
 import './Chat.css';
 
 
@@ -268,6 +269,11 @@ export default function Chat({ user }) {
     fetchModels();
   }, []);
 
+  // ── Abort stream on unmount to prevent memory leaks ──
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
+
   const fetchModels = async () => {
     try {
       const res = await chatApi.get(ENDPOINTS.CHAT_MODELS);
@@ -299,11 +305,13 @@ export default function Chat({ user }) {
     if (session.id === null) { 
       setActiveSession(DRAFT_SESSION); 
       setMessages([]); 
+      setError('');
       navigate('/chat/new');
       return; 
     }
+    setError('');
     setActiveSession(session);
-    if (session.id !== urlSessionId) navigate(`/chat/${session.id}`);
+    if (String(session.id) !== String(urlSessionId)) navigate(`/chat/${session.id}`);
     setModel(session.model || (availableModels.length > 0 ? availableModels[0].id : ''));
     try {
       const res = await chatApi.get(`/sessions/${session.id}/messages`);
@@ -322,9 +330,17 @@ export default function Chat({ user }) {
 
   const deleteSession = async (id) => {
     if (!window.confirm("Archive this conversation?")) return;
-    await chatApi.delete(`/sessions/${id}`);
-    setSessions(prev => prev.filter(s => s.id !== id));
-    if (activeSession?.id === id) { setActiveSession(null); setMessages([]); }
+    try {
+      await chatApi.delete(`/sessions/${id}`);
+      setSessions(prev => prev.filter(s => s.id !== id));
+      if (activeSession?.id === id) {
+        setActiveSession(null);
+        setMessages([]);
+        navigate('/chat');  // Reset URL so refresh doesn't try to load deleted session
+      }
+    } catch (e) {
+      setError('Failed to delete session');
+    }
   };
 
   const renameSession = async (id, title) => {
@@ -356,6 +372,8 @@ export default function Chat({ user }) {
         if (event.type === 'session') {
           sessionId = event.session_id;
           setActiveSession(s => ({ ...s, id: sessionId, title: event.title || s.title }));
+          // Update URL so refresh lands on the correct session (replace to avoid polluting history)
+          if (isDraft) navigate(`/chat/${event.session_id}`, { replace: true });
         }
         if (event.type === 'token') {
           prevContent += event.text;
@@ -505,7 +523,7 @@ export default function Chat({ user }) {
              <div className="gate-mesh"></div>
              <div className="gate-content">
                 <div className="gate-logo">
-                   <Brain size={64} />
+                   <img src={logoImg} alt="Darkny" className="gate-brand-logo" />
                 </div>
                 <h1>Welcome to <span>Darkny</span> AI</h1>
                 <p>Deploying high-performance neural nodes for your enterprise environment.</p>

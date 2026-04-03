@@ -173,11 +173,19 @@ const ManageProfile = () => {
                                       <div className="pref-bot">Digital Standard (English)</div>
                                   </div>
                               </div>
-                              <div className="pref-unit">
+                              <div className="pref-unit" style={{ opacity: 0.6 }}>
                                   <Smartphone size={18} />
                                   <div>
-                                      <div className="pref-top">Two-Factor Authentication</div>
-                                      <div className="pref-bot">Status: De-authorized</div>
+                                      <div className="pref-top" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        Two-Factor Authentication
+                                        <span style={{
+                                          fontSize: '0.6rem', fontWeight: 800, letterSpacing: '1px',
+                                          background: 'rgba(225,29,72,0.1)', color: 'var(--primary)',
+                                          border: '1px solid rgba(225,29,72,0.2)',
+                                          borderRadius: 6, padding: '2px 6px', textTransform: 'uppercase'
+                                        }}>Coming Soon</span>
+                                      </div>
+                                      <div className="pref-bot">Available in the next security update</div>
                                   </div>
                               </div>
                           </div>

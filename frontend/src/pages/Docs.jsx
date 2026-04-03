@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  ShieldCheck, ArrowLeft, Copy, AlertTriangle, 
+  ArrowLeft, Copy, AlertTriangle, 
   Search, Sun, Moon, Check, Terminal, ExternalLink 
 } from 'lucide-react';
+import logoImg from '../assets/logo.png';
 import './Docs.css'; // Use specialized CSS for docs
 
 const Documentation = ({ theme, toggleTheme }) => {
@@ -68,8 +69,7 @@ const Documentation = ({ theme, toggleTheme }) => {
         <div className="docs-sidebar-inner">
           <div className="docs-logo">
             <Link to="/" className="brand-logo">
-              <ShieldCheck color="var(--primary)" size={28} />
-              <span className="brand-name">Darkny Docs</span>
+              <img src={logoImg} alt="Darkny" className="docs-brand-logo-img" />
             </Link>
             <button className="theme-toggle-btn" onClick={toggleTheme} title="Toggle Theme">
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
@@ -114,7 +114,7 @@ const Documentation = ({ theme, toggleTheme }) => {
       {/* 📄 Main Content Area */}
       <main className="docs-main">
         <header className="docs-topbar">
-           <Link to="/" className="back-link">
+           <Link to="/" className="docs-back-link">
              <ArrowLeft size={16} /> <span>Back to Console</span>
            </Link>
            <div className="docs-actions">

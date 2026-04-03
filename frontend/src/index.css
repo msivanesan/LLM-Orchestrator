@@ -182,6 +182,23 @@ body {
 
 .brand-text { display: flex; flex-direction: column; }
 .brand-main { font-size: 1.5rem; font-weight: 800; color: var(--text-main); letter-spacing: -1px; line-height: 1; }
+
+/* Brand logo image styles */
+.sidebar-brand-logo {
+  width: 130px;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.login-brand-logo {
+  width: 260px;
+  height: auto;
+  object-fit: contain;
+  margin-bottom: 1.5rem;
+  filter: drop-shadow(0 8px 24px rgba(225, 29, 72, 0.25));
+}
+
 /* --- SIDEBAR --- */
 .sidebar {
   background: var(--sidebar-bg);
@@ -1798,6 +1815,33 @@ button.btn-small { width: auto; padding: 0.5rem 1rem; font-size: 0.875rem; displ
   box-shadow: 0 0 30px var(--shadow);
   animation: ringPulse 4s infinite alternate;
 }
+
+.login-card-symbol {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.home-nav-logo {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+
+.footer-nav-logo {
+  height: 30px;
+  width: auto;
+  object-fit: contain;
+  opacity: 0.8;
+}
+
+.mini-sidebar-logo-img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+
 
 @keyframes ringPulse {
   from { box-shadow: 0 0 10px var(--shadow); }

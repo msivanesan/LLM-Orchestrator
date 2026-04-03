@@ -47,9 +47,7 @@ function App() {
   const handleLogout = async () => {
     try {
       const refreshToken = localStorage.getItem('refresh_token');
-      // Revoke Access Token
       await api.delete('/logout');
-      // Revoke Refresh Token
       if (refreshToken) {
         await axios.delete(ENDPOINTS.LOGOUT_REFRESH, {
           headers: { Authorization: `Bearer ${refreshToken}` }
@@ -60,8 +58,10 @@ function App() {
     } finally {
       localStorage.clear();
       setUser(null);
+      window.location.replace('/'); // Redirect to home and clear history stack
     }
   };
+
 
   const fetchSession = async () => {
     if (localStorage.getItem('access_token')) {
